@@ -51,6 +51,10 @@ jobs:
 
   secrets:
     runs-on: ubuntu-latest
+    # PR scans read the PR's commit list to pick the scan range; comments stay off, so no write access.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v5
         with:
@@ -58,3 +62,4 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
