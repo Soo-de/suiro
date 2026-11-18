@@ -57,8 +57,8 @@ type Bundle struct {
 	// than the last attempt (ReasonSourceStale), an ignored snapshot
 	// (ReasonContractVersionUnknown). Sorted by Reason, then Subject.
 	Problems []Problem `json:"problems,omitempty"`
-	// Profile holds the admin-entered cluster profile; values the aws
-	// snapshot reveals take precedence.
+	// Profile is the admin-entered cluster profile of Environment, as store
+	// keeps it; values the aws snapshot reveals take precedence.
 	Profile ClusterProfile `json:"profile"`
 	// Rules are the forbidden paths and hygiene checks in force.
 	Rules RuleSet `json:"rules"`

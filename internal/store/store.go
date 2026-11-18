@@ -18,6 +18,7 @@ type Store interface {
 	ReadStore
 	AnalysisStore
 	RuleStore
+	ProfileStore
 	AccountStore
 	AuditLog
 }
@@ -119,6 +120,20 @@ type Exception struct {
 	ExpiresAt   time.Time
 	CreatedBy   string
 	RevokedAt   time.Time
+}
+
+// ProfileStore keeps the admin-entered cluster profile of each environment:
+// the values AWS cannot tell, entered on the settings page. inputs reads it
+// into model.Bundle.Profile; the admin API saves it and appends an
+// AuditEntry. Each analysis keeps the merged profile it assumed, so no
+// history is kept here.
+type ProfileStore interface {
+	// Profile returns the environment's admin-entered profile, or the zero
+	// ClusterProfile, every value unknown, when none was saved.
+	Profile(ctx context.Context, environment string) (model.ClusterProfile, error)
+	// SaveProfile replaces the environment's admin-entered profile. Every
+	// value in it counts as model.ProfileFromAdmin; p.Sources is not stored.
+	SaveProfile(ctx context.Context, environment string, p model.ClusterProfile) error
 }
 
 // AccountStore keeps local users and CI tokens. Neither a password nor a
