@@ -206,7 +206,9 @@ const (
 	CheckHostNetworkPod         HygieneCheck = "host-network-pod"
 	// CheckShadowedRule flags a Network ACL rule that earlier rules cover
 	// completely, so it never decides anything. It is a warning, not a
-	// block.
+	// block. Like every hygiene check it yields FindingHygiene findings, one
+	// per shadowed rule, whose Subject is the Network ACL's ObjectKey and
+	// whose Origin points at the rule.
 	CheckShadowedRule HygieneCheck = "shadowed-acl-rule"
 )
 
@@ -265,10 +267,11 @@ type FindingKind string
 const (
 	FindingForbidden FindingKind = "forbidden"
 	FindingRequired  FindingKind = "required"
-	FindingHygiene   FindingKind = "hygiene"
+	// FindingHygiene is a finding of any HygieneCheck, shadowed Network ACL
+	// rules included; its Rule names the HygieneRule.
+	FindingHygiene FindingKind = "hygiene"
 	// FindingUnmatched is an expectation whose selectors pick nothing.
 	FindingUnmatched FindingKind = "unmatched"
-	FindingShadowed  FindingKind = "shadowed"
 )
 
 // Finding is an expectation or check that is not satisfied. Exceptions are
@@ -288,9 +291,11 @@ type Finding struct {
 	New     bool         `json:"new"`
 	Paths   []PathKey    `json:"paths,omitempty"`
 	Reasons []ReasonCode `json:"reasons,omitempty"`
-	// Origin is the expectation's file and line.
+	// Origin is where the expectation is declared or, for a hygiene
+	// finding, the object or rule it is about.
 	Origin Origin `json:"origin"`
-	// Owner is the expectation's owner, the one to contact when another
-	// team's change breaks it; filled by api.ScopeFilter.
+	// Owner is the expectation's owner, or for a hygiene finding the
+	// object's: the one to contact when another team's change breaks it;
+	// filled by api.ScopeFilter.
 	Owner Owner `json:"owner,omitzero"`
 }
