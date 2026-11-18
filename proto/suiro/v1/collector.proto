@@ -12,13 +12,21 @@ package suiro.v1;
 import "suiro/v1/types.proto";
 
 // CollectorService reads sources and publishes their complete reads.
+//
+// Two errors carry a meaning and use fixed status codes, which
+// internal/rpc maps to its sentinel errors: NOT_FOUND for a source outside
+// the watch list (rpc.ErrUnknownSource) and FAILED_PRECONDITION for a read
+// key with no complete read (rpc.ErrNoCompleteRead). Any other code is a
+// failure of the call.
 service CollectorService {
   // Watch replaces the watch list and streams source statuses: on every
   // change, and for every source at least once per heartbeat interval.
   rpc Watch(WatchRequest) returns (stream WatchResponse);
-  // GetSnapshot returns the latest complete snapshot of a read key.
+  // GetSnapshot returns the latest complete snapshot of a read key;
+  // NOT_FOUND or FAILED_PRECONDITION as the service comment says.
   rpc GetSnapshot(GetSnapshotRequest) returns (GetSnapshotResponse);
   // Refresh queues a read of one source now; the result arrives via Watch.
+  // NOT_FOUND for a source outside the watch list.
   rpc Refresh(RefreshRequest) returns (RefreshResponse);
 }
 
