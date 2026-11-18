@@ -1,6 +1,8 @@
-// Package sets is the set algebra under every gate: IP prefixes and
-// protocol/port ranges as sorted interval lists with union, intersection and
-// difference. Its laws (commutativity, De Morgan, absorption) are checked
-// with property-based tests. A BDD representation can replace the interval
-// lists later without changing callers.
+// Package sets is the set algebra under every gate: protocol/port sets
+// (GateSet) and IPv4 address sets (AddrSet) with union, intersection and
+// difference, built through a Space. The first Space keeps sorted interval
+// lists (a prefix a/n is the interval [a, a+2^(32-n)-1]). Its laws
+// (commutativity, De Morgan, absorption) are checked with property-based
+// tests. A BDD representation can replace the interval lists later by
+// providing another Space, without changing callers.
 package sets
