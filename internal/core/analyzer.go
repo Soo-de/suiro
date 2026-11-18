@@ -24,9 +24,10 @@ type Analyzer interface {
 	//     outcome, and combine class outcomes into the Verdict, applying
 	//     input-level reasons over everything else;
 	//  5. compare with b.Before at class level into Changes;
-	//  6. evaluate b.Rules and the fragments' required expectations on both
-	//     sides into Findings, marking a finding New when its status got
-	//     worse.
+	//  6. evaluate b.Rules and the required expectations of the fragments
+	//     (each source's, at the revision its snapshot read) against both
+	//     sides' paths into Findings, marking a finding New when its status
+	//     got worse.
 	//
 	// Status is AnalysisDone, or AnalysisPartial when an input- or
 	// partial-level reason holds. Analyze returns an error only when it

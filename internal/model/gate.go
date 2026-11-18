@@ -226,7 +226,9 @@ type Fragment struct {
 	// Profile holds the cluster profile values the snapshot reveals (an aws
 	// snapshot: node groups, VPC CNI settings); nil when it reveals none.
 	Profile *ClusterProfile `json:"profile,omitempty"`
-	// Expectations are required paths declared next to the manifests.
+	// Expectations are the source's required paths, from the
+	// KindExpectation objects of its snapshot (ExpectationsFile); only the
+	// adapter of git snapshots sets them.
 	Expectations []Expectation `json:"expectations,omitempty"`
 	// Problems carry every object the adapter could not translate or chose
 	// to flag; each object of the snapshot ends in the model, in

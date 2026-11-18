@@ -20,8 +20,9 @@
 //     the three-valued gate Outcome under it, before/after changes,
 //     expectations and findings.
 //   - Reasons, files and callers (reason.go, registration.go, caller.go): the
-//     reason codes every warning and Unknown carries, the registration and
-//     ownership file schemas, and the caller a result is filtered for.
+//     reason codes every warning and Unknown carries, the registration,
+//     ownership and expectations file schemas, and the caller a result is
+//     filtered for.
 //
 // JSON field names are the wire and storage names: the HTTP API, documents in
 // the database, and the YAML files, which are read through a YAML-to-JSON

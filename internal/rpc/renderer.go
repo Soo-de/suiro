@@ -6,17 +6,23 @@ import (
 	"github.com/Soo-de/suiro/internal/model"
 )
 
-// Renderer turns one source's files into Kubernetes objects. git-collector
-// is its only caller. Its input is untrusted pull request content, so the
+// Renderer turns one source's files into Kubernetes objects and returns the
+// entries of the source's expectations file with them. git-collector is its
+// only caller. Its input is untrusted pull request content, so the
 // renderer runs each job in a subprocess with its own temporary directory
 // (removed afterwards), no credentials, no network, and time and memory
 // limits; plugins, exec functions and remote resources are refused.
 type Renderer interface {
 	// Render returns the request's objects reduced to model.KeptFields, in
-	// output order, with any warnings (model.ReasonNamespaceMismatch). A
-	// problem with the content itself (a template error, a timeout, a
-	// limit, a refused remote resource, a bad path) ends the job with one
-	// input-level Problem and no objects: half a render is never returned.
+	// output order, with any warnings (model.ReasonNamespaceMismatch).
+	// After them come the entries of the expectations file at the top of
+	// Path (model.ExpectationsFile), one model.KindExpectation object each,
+	// when the file exists; a file that does not validate adds a
+	// model.ReasonExpectationsInvalid warning instead and never fails the
+	// job. A problem with the content itself (a template error, a timeout,
+	// a limit, a refused remote resource, a bad path) ends the job with one
+	// input-level Problem and no objects, expectation entries included:
+	// half a render is never returned.
 	// The error is only for failures of the call itself, such as an
 	// unreachable renderer or a cancelled ctx.
 	Render(ctx context.Context, req RenderRequest) (RenderResult, error)
@@ -28,7 +34,8 @@ type RenderRequest struct {
 	// Source names the registration, for origins and logs.
 	Source model.SourceID
 	Kind   model.RenderKind
-	// Path is the directory inside Files to render.
+	// Path is the directory inside Files to render; the expectations file
+	// is read from its top.
 	Path string
 	// Namespace is the destination namespace: helm's --namespace, and the
 	// namespace set on namespaced objects that name none. An object naming

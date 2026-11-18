@@ -25,6 +25,10 @@ const (
 	KindEKSCluster       ObjectKind = "aws:eks/Cluster"
 	KindNodegroup        ObjectKind = "aws:eks/Nodegroup"
 	KindEKSAddon         ObjectKind = "aws:eks/Addon"
+
+	// KindExpectation is one entry of an application's ExpectationsFile.
+	// Its ObjectKey is "<KindExpectation>/<Expectation.ID>".
+	KindExpectation ObjectKind = "suiro:core/Expectation"
 )
 
 // FieldPath is one kept field in an object's own JSON shape. Segments are
@@ -51,9 +55,9 @@ var KubeIdentityFields = []FieldPath{
 
 // KeptFields is the field whitelist: for each kind, the only fields a stored
 // object keeps beyond KubeIdentityFields. The renderer applies it to every
-// rendered object and cloud-collector to every AWS object before either
-// leaves its service, so the server, the database and the logs never see
-// anything else.
+// rendered object and every expectation entry, and cloud-collector to every
+// AWS object, before either leaves its service, so the server, the
+// database and the logs never see anything else.
 //
 // What it leaves out on purpose: Secret and ConfigMap data, container env,
 // envFrom, command, args and images, annotations (they can hold anything,
@@ -180,6 +184,13 @@ var KeptFields = map[ObjectKind][]FieldPath{
 		"ConfigurationValues.env.ENABLE_POD_ENI",
 		"ConfigurationValues.env.AWS_VPC_K8S_CNI_CUSTOM_NETWORK_CFG",
 		"ConfigurationValues.env.ENABLE_PREFIX_DELEGATION",
+	},
+
+	// An expectation keeps the fields of ExpectationSpec and nothing a
+	// writer adds beside them.
+	KindExpectation: {
+		"name", "sources", "destinations", "ports",
+		"sourceQuantifier", "destinationQuantifier",
 	},
 }
 

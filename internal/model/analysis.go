@@ -145,8 +145,8 @@ type Change struct {
 type ExpectationKind string
 
 const (
-	// ExpectRequired paths must work. Application owners declare them next
-	// to their manifests.
+	// ExpectRequired paths must work. Application owners declare them in
+	// their repository's ExpectationsFile, next to their manifests.
 	ExpectRequired ExpectationKind = "required"
 	// ExpectForbidden paths must never open. The security team keeps them in
 	// the service, versioned.
@@ -183,8 +183,9 @@ type EndpointSelector struct {
 // A forbidden one is violated when some source reaches some destination on
 // some port of Ports in some placement: it takes no quantifiers.
 type Expectation struct {
-	// ID is stable: the rule key for forbidden ("builtin.internet-db-ports"),
-	// "<file>#<name>" for required.
+	// ID is stable and unique across sources: the rule key for forbidden
+	// ("builtin.internet-db-ports"), "<SourceID>#<name>" for required
+	// ("payments/payments-api#api-reaches-db").
 	ID           string           `json:"id"`
 	Kind         ExpectationKind  `json:"kind"`
 	Name         string           `json:"name"`

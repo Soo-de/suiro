@@ -50,14 +50,16 @@ type Snapshot struct {
 
 // ObjectKind names a kind of source object as "<source>:<group>/<Kind>":
 // "k8s:apps/Deployment", "k8s:core/Service" (core is Kubernetes' empty API
-// group), "aws:ec2/SecurityGroup", "aws:eks/Nodegroup". The API version is
-// not part of it; v1 is assumed.
+// group), "aws:ec2/SecurityGroup", "aws:eks/Nodegroup", and
+// "suiro:core/Expectation" for Suiro's own expectations file. The API
+// version is not part of it; v1 is assumed.
 type ObjectKind string
 
 // ObjectKey identifies one object across sources and reads:
 // "<ObjectKind>/<namespace>/<name>" for namespaced Kubernetes objects,
 // "<ObjectKind>/<name>" for cluster-scoped ones and for AWS objects, whose
-// name is the resource ID ("aws:ec2/SecurityGroup/sg-0123"). Two sources
+// name is the resource ID ("aws:ec2/SecurityGroup/sg-0123"), and
+// "<ObjectKind>/<Expectation.ID>" for an expectation entry. Two sources
 // producing the same key is a duplicate (ReasonDuplicateResource when the
 // bodies are equal, ReasonConflictingResource when they differ).
 type ObjectKey string
@@ -68,11 +70,11 @@ type Object struct {
 	Key    ObjectKey  `json:"key"`
 	Origin Origin     `json:"origin"`
 	// Body is the object in its source's own JSON shape (a Kubernetes
-	// manifest; an AWS API output type with its PascalCase field names),
-	// holding only the paths KeptFields lists for Kind plus, for Kubernetes,
-	// KubeIdentityFields. Anything else, Secret data and environment
-	// variables included, is removed before the object leaves the renderer
-	// or the cloud-collector.
+	// manifest; an AWS API output type with its PascalCase field names; one
+	// ExpectationSpec entry), holding only the paths KeptFields lists for
+	// Kind plus, for Kubernetes, KubeIdentityFields. Anything else, Secret
+	// data and environment variables included, is removed before the object
+	// leaves the renderer or the cloud-collector.
 	Body json.RawMessage `json:"body"`
 }
 
@@ -83,11 +85,13 @@ type Origin struct {
 	// File is the repository-relative path of the file the object came from,
 	// as far as the renderer can tell: the file itself for plain YAML, the
 	// template named by Helm's "# Source:" comment, the origin annotation
-	// for Kustomize when present and otherwise the kustomization directory.
+	// for Kustomize when present and otherwise the kustomization directory;
+	// the expectations file for an expectation entry.
 	File string `json:"file,omitempty"`
 	// Line is the 1-based line in the rendered output of File where the
 	// object (or the rule, with Locator) starts. For templates it is the
-	// line of the output, not of the template.
+	// line of the output, not of the template; for an expectation entry,
+	// the line in the expectations file where the entry starts.
 	Line int `json:"line,omitempty"`
 	// Resource is the AWS resource ID for objects read from AWS.
 	Resource string `json:"resource,omitempty"`
