@@ -1,0 +1,51 @@
+// The collector contract (rpc.Collector). git-collector and cloud-collector
+// both serve it; only the server calls it, which the deployment's
+// NetworkPolicies enforce.
+//
+// Messages are unary except Watch. A snapshot travels in one message; both
+// ends raise their message size limit to the same configured value, and a
+// snapshot over it fails the read instead of arriving cut.
+syntax = "proto3";
+
+package suiro.v1;
+
+import "suiro/v1/types.proto";
+
+// CollectorService reads sources and publishes their complete reads.
+service CollectorService {
+  // Watch replaces the watch list and streams source statuses: on every
+  // change, and for every source at least once per heartbeat interval.
+  rpc Watch(WatchRequest) returns (stream WatchResponse);
+  // GetSnapshot returns the latest complete snapshot of a read key.
+  rpc GetSnapshot(GetSnapshotRequest) returns (GetSnapshotResponse);
+  // Refresh queues a read of one source now; the result arrives via Watch.
+  rpc Refresh(RefreshRequest) returns (RefreshResponse);
+}
+
+// WatchRequest carries the whole watch list.
+message WatchRequest {
+  repeated Source sources = 1;
+}
+
+// WatchResponse is one status event.
+message WatchResponse {
+  SourceStatus status = 1;
+}
+
+// GetSnapshotRequest names the read to fetch.
+message GetSnapshotRequest {
+  ReadKey key = 1;
+}
+
+// GetSnapshotResponse carries the snapshot.
+message GetSnapshotResponse {
+  Snapshot snapshot = 1;
+}
+
+// RefreshRequest names the source to read now.
+message RefreshRequest {
+  string source_id = 1;
+}
+
+// RefreshResponse confirms the read is queued.
+message RefreshResponse {}
