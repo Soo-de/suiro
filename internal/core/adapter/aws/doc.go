@@ -1,6 +1,8 @@
-// Package aws turns AWS network objects (Security Group, Network ACL, route
-// table, subnet, network interface) into model gates with AWS semantics:
-// Security Groups are stateful allow lists, Network ACLs are stateless
-// numbered rule lists evaluated per direction, route tables decide whether a
-// path exists at all.
+// Package aws implements core.Adapter for AWS network objects. It restates
+// them as model gates with AWS semantics: Security Groups are stateful,
+// additive allow lists; Network ACLs are stateless, numbered, first-match
+// rule lists per direction; route tables decide whether a path exists at
+// all. It also emits the topology (subnets, interfaces, NAT gateways), the
+// AWS-side endpoints, and the cluster profile values EKS reveals (node
+// groups, VPC CNI settings).
 package aws

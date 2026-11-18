@@ -1,5 +1,9 @@
-// Package k8s turns rendered Kubernetes objects (NetworkPolicy, workload pod
-// templates, Service, Namespace) into model gates with Kubernetes semantics:
-// a pod that no policy selects in a direction is open in that direction;
-// once selected, only what some policy allows passes.
+// Package k8s implements core.Adapter for rendered Kubernetes objects
+// (NetworkPolicy, workload pod templates, Service, Namespace). It restates
+// them as model gates whose semantics carry Kubernetes behaviour: a
+// NetworkPolicy is an isolating, additive, stateful filter (a pod that no
+// policy selects in a direction is open in that direction; once selected,
+// only what some policy allows passes), a Service a port transform.
+// Selectors stay unresolved for core. Unsupported policy kinds and
+// controller-managed AWS objects are flagged with their reason codes.
 package k8s
