@@ -1,0 +1,60 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Generate gRPC code
+        if: hashFiles('proto/**/*.proto') != ''
+        run: make generate
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test -race ./...
+      - name: Lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+
+  proto:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Lint contracts
+        if: hashFiles('proto/**/*.proto') != ''
+        run: make proto-lint
+      - name: Check for breaking changes against main
+        if: github.event_name == 'pull_request' && hashFiles('proto/**/*.proto') != ''
+        run: |
+          if git ls-tree -r --name-only origin/main -- proto | grep -q '\.proto$'; then
+            go tool -modfile=tools/go.mod buf breaking --against '.git#ref=refs/remotes/origin/main'
+          else
+            echo "main has no .proto files yet; nothing to compare against"
+          fi
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

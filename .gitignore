@@ -1,0 +1,71 @@
+# Local AI context: holds vault paths and personal context, never committed
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+.envrc
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+id_rsa*
+id_ed25519*
+kubeconfig
+*.kubeconfig
+.aws/
+*.secret.yaml
+*.local.yaml
+
+# Terraform: state and variable files can hold secrets
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+
+# Go build, test and debug output
+/bin/
+/dist/
+internal/gen/
+*.test
+*.out
+*.prof
+coverage.*
+__debug_bin*
+go.work
+go.work.sum
+
+# UI: the build lands in ui/dist/app, embedded into the server; the placeholder
+# keeps go build working before the UI is built
+ui/node_modules/
+ui/dist/*
+!ui/dist/app/
+ui/dist/app/*
+!ui/dist/app/.gitkeep
+ui/.vite/
+ui/coverage/
+ui/test-results/
+ui/playwright-report/
+ui/blob-report/
+*.tsbuildinfo
+
+# Helm
+deploy/helm/*/charts/*.tgz
+
+# Local scratch
+/tmp/
+*.log
+.cache/
+
+# OS and editors
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*~

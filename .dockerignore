@@ -1,0 +1,37 @@
+# Only what the image build needs enters the build context. Generated code and
+# the UI bundle are rebuilt inside the build so the image never depends on a
+# developer's local state.
+.git
+.github
+.claude
+CLAUDE.md
+CLAUDE.local.md
+
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+kubeconfig
+*.kubeconfig
+.aws
+*.tfstate
+*.tfstate.*
+*.tfvars
+
+bin
+dist
+internal/gen
+ui/node_modules
+ui/dist
+deploy
+examples
+**/testdata
+coverage.*
+*.test
+*.out
+
+.DS_Store
+.vscode
+.idea

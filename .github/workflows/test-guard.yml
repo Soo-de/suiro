@@ -1,0 +1,23 @@
+name: test-guard
+
+# Runs again when labels change, so adding the approval label turns it green
+# without a new commit.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  existing-tests-unchanged:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Existing tests and test data are not weakened without approval
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'test-change-approved') }}
+        run: .github/scripts/test-guard.sh
