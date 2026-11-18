@@ -138,20 +138,26 @@ type ClassResult struct {
 // GateRef names one chain step: the gates of one Layer and Direction that
 // guard the same target, joined (every Security Group on an interface,
 // every NetworkPolicy selecting a pod). An Isolating step with no Members
-// means no policy selects the target, which passes.
+// that is not Redacted means no policy selects the target, which passes.
 type GateRef struct {
 	Layer     Layer     `json:"layer"`
 	Type      GateType  `json:"type"`
 	Direction Direction `json:"direction,omitempty"`
 	Members   []GateID  `json:"members"`
-	// Owner is the owner of the step's members, filled by api.ScopeFilter;
-	// core leaves it zero.
-	Owner Owner `json:"owner,omitzero"`
-	// Redacted means a ScopeFilter cut this step down to its location
-	// because the caller's scopes do not match Owner: Layer, Type,
-	// Direction, Owner and the outcome stay; an AWS step keeps its Members
-	// (resource IDs); a Kubernetes step loses its Members; every step loses
-	// its Rules.
+	// Owners are the distinct owners of Members, sorted by Team then
+	// Application, with the zero Owner for a member nobody owns; filled by
+	// api.ScopeFilter, core leaves them empty. A joined step can have
+	// several (a platform default-deny policy and the application's own
+	// policy on one pod). They stay when the step is redacted, so a block
+	// always names whom to contact.
+	Owners []Owner `json:"owners,omitempty"`
+	// Redacted means a ScopeFilter removed content the caller may not see.
+	// This is the one definition of redaction, applied per member: a member
+	// whose owner one of the caller's scopes matches stays whole; for every
+	// other member, its rules leave GateResult.Rules, and a Kubernetes
+	// member also leaves Members while an AWS member keeps its ID there (a
+	// resource ID). Layer, Type, Direction, Owners, the step's Outcome and
+	// Reason always stay, as do the path's key and ports.
 	Redacted bool `json:"redacted,omitempty"`
 }
 
