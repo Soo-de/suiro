@@ -176,12 +176,11 @@ type EndpointSelector struct {
 	Labels     *LabelSelector `json:"labels,omitempty"`
 }
 
-// Expectation is a required or forbidden path set.
-//
-// A required expectation holds when, with the source quantifier outside,
-// Q_s s ∈ Sources, Q_d d ∈ Destinations, every port of Ports is Allow.
-// A forbidden one is violated when some source reaches some destination on
-// some port of Ports in some placement: it takes no quantifiers.
+// Expectation is a required or forbidden path set: the paths from Sources
+// to Destinations over Ports. Its status follows the one rule in
+// ExpectationStatus. A required expectation takes both quantifiers, the
+// source quantifier outside; a forbidden one takes none and asks whether
+// any source reaches any destination on any port in any placement.
 type Expectation struct {
 	// ID is stable and unique across sources: the rule key for forbidden
 	// ("builtin.internet-db-ports"), "<SourceID>#<name>" for required
@@ -228,11 +227,30 @@ type RuleSet struct {
 }
 
 // ExpectationStatus is an expectation's three-valued state. It is computed
-// from class outcomes with Kleene quantifiers, not from the Verdict, so a
-// certain answer survives Undetermined classes elsewhere:
+// from class outcomes, never from a path's Verdict, by one rule.
 //
-//	required:  ∀ class pairs Pass  → satisfied; ∃ Block → violated; else unverifiable
-//	forbidden: ∃ class pair Pass   → violated;  ∀ Block → satisfied; else unverifiable
+// Let S and D be the endpoints the selectors pick. For s ∈ S and d ∈ D,
+// t(s, d) combines the class outcomes of every path from s to d whose port
+// range overlaps Ports. A path that an input-level reason covers adds
+// Undetermined for each of its classes, whatever its gates say, because
+// those gates cannot be trusted (the same reason makes its Verdict
+// Unknown). With Kleene AND for ∀ and Kleene OR for ∃:
+//
+//	required:  t(s, d) = AND of the outcomes,  T = Q_s s ∈ S  Q_d d ∈ D : t(s, d)
+//	           T Pass → satisfied, T Block → violated, else unverifiable
+//	forbidden: t(s, d) = OR of the outcomes,   T = OR over s ∈ S, d ∈ D of t(s, d)
+//	           T Pass → violated, T Block → satisfied, else unverifiable
+//
+// So a required expectation is satisfied exactly when, under its
+// quantifiers, every path it covers is Allow; a forbidden one is violated
+// by any path it covers that is Allow or PlacementDependent, or Unknown
+// with a passing class and no input-level reason. A certain answer
+// survives Undetermined classes elsewhere: one blocking class makes a
+// required t(s, d) Block, one passing class makes a forbidden one Pass. A
+// path that an input-level reason covers can neither satisfy nor violate
+// an expectation; alone, it leaves it unverifiable. When S or D is empty
+// nothing is evaluated: the expectation yields a FindingUnmatched whose
+// Status is Unverifiable, never Satisfied.
 type ExpectationStatus string
 
 const (
