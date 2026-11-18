@@ -1,5 +1,8 @@
 GO       ?= go
 BUF      := $(GO) tool -modfile=tools/go.mod buf
+# Keep in step with the version in .github/workflows/ci.yml.
+GOLANGCI_LINT_VERSION := v2.15.0
+GOLANGCI_LINT := $(GO) run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS  := -s -w -X github.com/Soo-de/suiro/internal/version.Version=$(VERSION)
 PROGRAMS := server git-collector renderer cloud-collector suiro
@@ -30,8 +33,8 @@ vet: ## Run go vet
 	$(GO) vet ./...
 
 .PHONY: lint
-lint: ## Run golangci-lint (v2, installed separately)
-	golangci-lint run
+lint: ## Run golangci-lint at the version CI pins
+	$(GOLANGCI_LINT) run
 
 .PHONY: fmt
 fmt: ## Format Go code

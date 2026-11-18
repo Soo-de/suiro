@@ -26,7 +26,8 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          # Pinned so a new linter release cannot turn CI red without a code change; keep in step with the Makefile.
+          version: v2.15.0
 
   proto:
     runs-on: ubuntu-latest
