@@ -178,8 +178,8 @@ const (
 	ReasonExpectationsInvalid ReasonCode = "expectations-invalid"
 )
 
-// ReasonLevels gives every reason code its level. A code missing here is a
-// bug; tests check that every declared code is listed.
+// ReasonLevels gives every reason code its level. Every declared code has
+// an entry; a code missing here is a bug.
 var ReasonLevels = map[ReasonCode]ReasonLevel{
 	ReasonPolicyEnforcementUnknown: LevelGate,
 	ReasonHostNetwork:              LevelGate,
