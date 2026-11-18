@@ -128,7 +128,8 @@ message Snapshot {
 }
 
 // Object is one source object reduced to its kept fields (model.Object).
-// body is the object's JSON holding only the paths model.KeptFields lists.
+// body is the object's JSON holding only the paths model.KeptFields lists
+// for its kind plus, for a Kubernetes object, model.KubeIdentityFields.
 message Object {
   string kind = 1;
   string key = 2;

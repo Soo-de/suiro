@@ -13,9 +13,10 @@ import (
 // (removed afterwards), no credentials, no network, and time and memory
 // limits; plugins, exec functions and remote resources are refused.
 type Renderer interface {
-	// Render returns the request's objects reduced to model.KeptFields, in
-	// output order, with any warnings (model.ReasonNamespaceMismatch).
-	// After them come the entries of the expectations file at the top of
+	// Render returns the request's objects reduced to their kept fields
+	// (model.KeptFields plus model.KubeIdentityFields, see
+	// model.Object.Body), in output order, with any warnings
+	// (model.ReasonNamespaceMismatch). After them come the entries of the expectations file at the top of
 	// Path (model.ExpectationsFile), one model.KindExpectation object each,
 	// when the file exists; a file that does not validate adds a
 	// model.ReasonExpectationsInvalid warning instead and never fails the
