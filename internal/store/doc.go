@@ -4,6 +4,6 @@
 // the contract; ReadStore, AnalysisStore, RuleStore, ProfileStore,
 // AccountStore and AuditLog are its parts, so each caller depends only on
 // what it uses. Only the server holds a Store. It keeps only network-relevant
-// fields of a resource (model.KeptFields): Secret values and environment
-// variables never reach the database.
+// fields of a resource (model.KeptFields plus model.KubeIdentityFields):
+// Secret values and environment variables never reach the database.
 package store
