@@ -1,0 +1,155 @@
+// Messages shared by the services the server calls. Each mirrors the model
+// type of the same name in internal/model, which holds the full contract;
+// internal/rpc converts between the two, so no caller sees these messages.
+//
+// The contract only grows: fields are added, never removed or renumbered
+// (buf breaking enforces it). Reason codes and object kinds are strings, so
+// adding one needs no change here.
+syntax = "proto3";
+
+package suiro.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// SourceKind says which collector reads a source.
+enum SourceKind {
+  SOURCE_KIND_UNSPECIFIED = 0;
+  SOURCE_KIND_GIT = 1;
+  SOURCE_KIND_AWS = 2;
+}
+
+// RenderKind is how the renderer turns a source's files into objects.
+enum RenderKind {
+  RENDER_KIND_UNSPECIFIED = 0;
+  RENDER_KIND_PLAIN = 1;
+  RENDER_KIND_KUSTOMIZE = 2;
+  RENDER_KIND_HELM = 3;
+}
+
+// Source is what a collector needs to read one source (model.Source, minus
+// the owner, which collectors do not need). Exactly one of git and aws is
+// set, matching kind.
+message Source {
+  string id = 1;
+  SourceKind kind = 2;
+  string environment = 3;
+  GitSource git = 4;
+  AwsSource aws = 5;
+}
+
+// GitSource locates an application's manifests (model.GitSource).
+message GitSource {
+  string repo_url = 1;
+  string path = 2;
+  string target_revision = 3;
+  RenderKind render = 4;
+  HelmSource helm = 5;
+  string namespace = 6;
+}
+
+// HelmSource holds the helm template inputs (model.HelmSource).
+message HelmSource {
+  string release_name = 1;
+  repeated string value_files = 2;
+  repeated HelmParameter parameters = 3;
+}
+
+// HelmParameter is one --set value (model.HelmParameter).
+message HelmParameter {
+  string name = 1;
+  string value = 2;
+  bool force_string = 3;
+}
+
+// AwsSource locates the AWS network of one environment (model.AWSSource).
+message AwsSource {
+  string region = 1;
+  string vpc_id = 2;
+  string cluster_name = 3;
+}
+
+// PullRequest is an open pull request (model.PullRequest). merge_sha is
+// empty when it cannot merge.
+message PullRequest {
+  string repo_url = 1;
+  int32 number = 2;
+  string head_sha = 3;
+  string merge_sha = 4;
+  string target_branch = 5;
+}
+
+// ReadKey names one readable state of a source; pull_request 0 is the
+// target branch or live AWS state (model.ReadKey).
+message ReadKey {
+  string source_id = 1;
+  int32 pull_request = 2;
+}
+
+// SourceState is a source's read state (model.SourceState).
+enum SourceState {
+  SOURCE_STATE_UNSPECIFIED = 0;
+  SOURCE_STATE_CONNECTING = 1;
+  SOURCE_STATE_CONNECTED = 2;
+  SOURCE_STATE_ACCESS_ERROR = 3;
+  SOURCE_STATE_READ_ERROR = 4;
+}
+
+// SourceStatus is one Watch event (model.SourceStatus).
+message SourceStatus {
+  string source_id = 1;
+  SourceState state = 2;
+  string reason = 3;
+  string message = 4;
+  google.protobuf.Timestamp last_complete_read = 5;
+  repeated ReadVersion reads = 6;
+}
+
+// ReadVersion announces the latest complete read of one read key
+// (model.ReadVersion). pull_request is unset for the target branch.
+message ReadVersion {
+  PullRequest pull_request = 1;
+  string revision = 2;
+  string digest = 3;
+  google.protobuf.Timestamp completed_at = 4;
+}
+
+// Snapshot is one complete read (model.Snapshot). A server that does not
+// know contract_version ignores the snapshot and keeps the previous read.
+message Snapshot {
+  ReadKey key = 1;
+  PullRequest pull_request = 2;
+  string revision = 3;
+  int32 contract_version = 4;
+  string digest = 5;
+  google.protobuf.Timestamp read_started_at = 6;
+  google.protobuf.Timestamp read_finished_at = 7;
+  repeated Object objects = 8;
+  repeated Problem problems = 9;
+}
+
+// Object is one source object reduced to its kept fields (model.Object).
+// body is the object's JSON holding only the paths model.KeptFields lists.
+message Object {
+  string kind = 1;
+  string key = 2;
+  Origin origin = 3;
+  bytes body = 4;
+}
+
+// Origin says where an object or rule came from (model.Origin).
+message Origin {
+  string source_id = 1;
+  string file = 2;
+  int32 line = 3;
+  string resource = 4;
+  string locator = 5;
+}
+
+// Problem is a reasoned warning or Unknown cause (model.Problem); reason is
+// a model.ReasonCode.
+message Problem {
+  string reason = 1;
+  string subject = 2;
+  string message = 3;
+  Origin origin = 4;
+}

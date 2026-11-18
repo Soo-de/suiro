@@ -53,7 +53,7 @@ proto-breaking: ## Check the .proto contracts against main for breaking changes
 	$(BUF) breaking --against '.git#branch=main'
 
 .PHONY: tidy
-tidy: ## Tidy both modules
+tidy: generate ## Tidy both modules (generated code first, or tidy drops the gRPC requirements)
 	$(GO) mod tidy
 	cd tools && $(GO) mod tidy
 

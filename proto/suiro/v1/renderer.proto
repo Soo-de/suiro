@@ -1,0 +1,39 @@
+// The renderer contract (rpc.Renderer). Only git-collector calls it; the
+// renderer itself has no credentials and no egress.
+syntax = "proto3";
+
+package suiro.v1;
+
+import "suiro/v1/types.proto";
+
+// RendererService turns one source's files into Kubernetes objects.
+service RendererService {
+  // Render runs one job. Content problems come back as problems with no
+  // objects; a gRPC error means the call itself failed.
+  rpc Render(RenderRequest) returns (RenderResponse);
+}
+
+// RenderRequest is one render job (rpc.RenderRequest).
+message RenderRequest {
+  string source_id = 1;
+  RenderKind kind = 2;
+  // path is the directory inside files to render.
+  string path = 3;
+  // namespace is the destination namespace.
+  string namespace = 4;
+  HelmSource helm = 5;
+  // files is the repository tree at the revision, regular files only.
+  repeated File files = 6;
+}
+
+// File is one repository file; path is relative and slash-separated.
+message File {
+  string path = 1;
+  bytes content = 2;
+}
+
+// RenderResponse is the job's outcome (rpc.RenderResult).
+message RenderResponse {
+  repeated Object objects = 1;
+  repeated Problem problems = 2;
+}
