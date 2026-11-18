@@ -97,7 +97,9 @@ const (
 	ReasonAWSControllerEffect ReasonCode = "aws-controller-effect"
 )
 
-// Input-level reasons. Their Subject is a SourceID.
+// Input-level reasons. Their Subject is a SourceID, the source whose scope
+// they cover; a problem that involves several sources is raised once for
+// each.
 const (
 	ReasonRenderFailed  ReasonCode = "render-failed"
 	ReasonRenderTimeout ReasonCode = "render-timeout"
@@ -120,7 +122,9 @@ const (
 	// ReasonPullRequestNotMergeable: GitHub has no test merge commit.
 	ReasonPullRequestNotMergeable ReasonCode = "pr-not-mergeable"
 	// ReasonConflictingResource: two sources produce the same ObjectKey with
-	// different content.
+	// different content. Core raises it once for each source involved, with
+	// that source as Subject and the object's Origin in that source, so the
+	// scope of every source involved is Unknown.
 	ReasonConflictingResource ReasonCode = "conflicting-resource"
 	// ReasonIPFamilyUnsupported: the cluster or VPC is IPv6; the model is
 	// IPv4.

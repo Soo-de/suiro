@@ -14,7 +14,8 @@ type Analyzer interface {
 	//
 	//  1. translate each snapshot with the adapter of its kind and merge the
 	//     fragments (an ObjectKey from two sources: equal bodies warn,
-	//     different bodies make that source's scope Unknown);
+	//     different bodies make the scope of both sources Unknown, with one
+	//     model.ReasonConflictingResource problem per source);
 	//  2. merge the cluster profile (AWS-read values win over admin ones);
 	//  3. resolve selectors, Service targets, Security Group membership and
 	//     each endpoint's placement classes;
