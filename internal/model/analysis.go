@@ -48,14 +48,14 @@ type Bundle struct {
 	PullRequest *PullRequest `json:"pullRequest,omitempty"`
 	// Sources are every registered source of the environment, including
 	// those without a usable snapshot, so an input-level problem can be
-	// scoped to the source's namespace.
+	// scoped to the source's namespace. Sorted by ID.
 	Sources []Source `json:"sources"`
-	// Snapshots are the after side: at most one per source.
+	// Snapshots are the after side: at most one per source, sorted by Key.
 	Snapshots []Snapshot `json:"snapshots"`
 	// Problems are what inputs found before analysis, each with a SourceID
 	// as Subject: no complete read yet (ReasonSourceUnread), a read older
 	// than the last attempt (ReasonSourceStale), an ignored snapshot
-	// (ReasonContractVersionUnknown).
+	// (ReasonContractVersionUnknown). Sorted by Reason, then Subject.
 	Problems []Problem `json:"problems,omitempty"`
 	// Profile holds the admin-entered cluster profile; values the aws
 	// snapshot reveals take precedence.
@@ -68,10 +68,24 @@ type Bundle struct {
 	// added since Before reports what was already violated as existing,
 	// not new.
 	Before *Analysis `json:"before,omitempty"`
-	// Fingerprint is the SHA-256 over the sorted (source, digest) pairs of
-	// Snapshots, Before's fingerprint, Profile, Rules.Version and
-	// ToolVersion. inputs skips the analysis when one with this fingerprint
-	// is stored.
+	// Fingerprint identifies what the Bundle yields: two Bundles with the
+	// same fingerprint give the same Analysis, so inputs skips the analysis
+	// when one with this fingerprint is stored. It is the SHA-256 of the
+	// JSON encoding of every other field of the Bundle, lists in the order
+	// stated above, with these reductions:
+	//   - PullRequest keeps only RepoURL and Number, so a new commit that
+	//     changes no input reuses the stored analysis;
+	//   - each snapshot keeps only its Key and Digest, which covers its
+	//     objects and problems;
+	//   - each problem keeps only Reason and Subject, so detail text that
+	//     differs between attempts forces no new analysis;
+	//   - Rules keeps only Version, which names its content;
+	//   - Before keeps only its Fingerprint, empty when Before is nil.
+	//
+	// Kind, Environment and the pull request's identity are part of it, so
+	// a baseline never shares a fingerprint with a pull request analysis,
+	// nor one pull request with another, however alike their inputs. A
+	// field added to Bundle is added to the fingerprint.
 	Fingerprint Digest `json:"fingerprint"`
 	ToolVersion string `json:"toolVersion"`
 }
@@ -88,16 +102,18 @@ type SnapshotRef struct {
 type Analysis struct {
 	ID AnalysisID `json:"id,omitempty"`
 	// Base is Before's ID; 0 when there was no before side.
-	Base           AnalysisID     `json:"base,omitempty"`
-	Kind           AnalysisKind   `json:"kind"`
-	Environment    string         `json:"environment"`
-	PullRequest    *PullRequest   `json:"pullRequest,omitempty"`
-	Status         AnalysisStatus `json:"status"`
-	Fingerprint    Digest         `json:"fingerprint"`
-	ToolVersion    string         `json:"toolVersion"`
-	RuleSetVersion int64          `json:"ruleSetVersion"`
-	CreatedAt      time.Time      `json:"createdAt,omitzero"`
-	Inputs         []SnapshotRef  `json:"inputs"`
+	Base        AnalysisID     `json:"base,omitempty"`
+	Kind        AnalysisKind   `json:"kind"`
+	Environment string         `json:"environment"`
+	PullRequest *PullRequest   `json:"pullRequest,omitempty"`
+	Status      AnalysisStatus `json:"status"`
+	// Fingerprint is the Bundle's, so it also names the kind, environment
+	// and pull request.
+	Fingerprint    Digest        `json:"fingerprint"`
+	ToolVersion    string        `json:"toolVersion"`
+	RuleSetVersion int64         `json:"ruleSetVersion"`
+	CreatedAt      time.Time     `json:"createdAt,omitzero"`
+	Inputs         []SnapshotRef `json:"inputs"`
 	// Profile is the merged cluster profile the verdicts assumed, with the
 	// source of each value.
 	Profile    ClusterProfile `json:"profile"`
