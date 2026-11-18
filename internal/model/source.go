@@ -59,7 +59,8 @@ type RenderKind string
 
 const (
 	// RenderPlain reads every .yaml, .yml and .json file under Path,
-	// recursively, in lexical order.
+	// recursively, in lexical order, except the ExpectationsFileName at the
+	// top of Path, which is not a manifest.
 	RenderPlain RenderKind = "plain"
 	// RenderKustomize runs kustomize build on Path with plugins, exec
 	// functions, Helm inflation and remote bases disabled.

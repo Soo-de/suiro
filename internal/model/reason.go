@@ -167,6 +167,11 @@ const (
 	// ReasonProfileConflict: an admin-entered cluster profile value differs
 	// from the one read from AWS; the AWS value wins.
 	ReasonProfileConflict ReasonCode = "profile-conflict"
+	// ReasonExpectationsInvalid: an application's expectations file, or one
+	// entry in it, does not validate (see ExpectationsFile); what was
+	// rejected is not checked. The Subject is the file's path for the whole
+	// file and the entry's ObjectKey for one entry.
+	ReasonExpectationsInvalid ReasonCode = "expectations-invalid"
 )
 
 // ReasonLevels gives every reason code its level. A code missing here is a
@@ -214,4 +219,5 @@ var ReasonLevels = map[ReasonCode]ReasonLevel{
 	ReasonHostPort:               LevelWarning,
 	ReasonSymlinkSkipped:         LevelWarning,
 	ReasonProfileConflict:        LevelWarning,
+	ReasonExpectationsInvalid:    LevelWarning,
 }

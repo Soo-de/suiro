@@ -110,3 +110,62 @@ type OwnershipRule struct {
 	Match string `json:"match"`
 	Owner Owner  `json:"owner"`
 }
+
+// File identifiers of the expectations file, the one Suiro file that lives
+// in an application repository. Its apiVersion is FileAPIVersion.
+const (
+	ExpectationsFileKind = "Expectations"
+	// ExpectationsFileName is the file's name at the top of the
+	// registration's path.
+	ExpectationsFileName = "suiro-expectations.yaml"
+)
+
+// ExpectationsFile declares an application's required paths. It lives in
+// the application's own repository, as ExpectationsFileName at the top of
+// the registration's path, so it changes with the code it describes. It is
+// optional.
+//
+//	apiVersion: suiro/v1
+//	kind: Expectations
+//	expectations:
+//	  - name: api-reaches-db
+//	    sources: {endpoints: ["k8s:apps/Deployment/payments/api"]}
+//	    destinations: {endpoints: ["aws:database/orders-db"]}
+//	    ports: [{protocol: tcp, from: 5432, to: 5432}]
+//	    sourceQuantifier: all
+//	    destinationQuantifier: any
+//
+// The file travels inside its source's snapshot: the renderer reads it from
+// the tree it renders and returns each entry as one KindExpectation object
+// whose body is the entry, and the adapter of git snapshots turns those
+// into Fragment.Expectations. An analysis therefore uses each source's
+// expectations at the revision it reads that source: a pull request
+// analysis takes the pull request's version for the sources of its own
+// repository and the target branch's version for every other source.
+//
+// Validation: the renderer rejects the whole file when it does not parse,
+// has another apiVersion or kind, or has an entry without a name or two
+// entries with the same name; the adapter rejects one entry whose sources
+// or destinations set no form, whose ports are missing or invalid, or
+// whose quantifiers are not "all" or "any". Either raises
+// ReasonExpectationsInvalid, and what was rejected is not checked; it never
+// fails the render. An entry whose selectors pick nothing is valid and
+// becomes FindingUnmatched.
+type ExpectationsFile struct {
+	APIVersion   string            `json:"apiVersion"`
+	Kind         string            `json:"kind"`
+	Expectations []ExpectationSpec `json:"expectations"`
+}
+
+// ExpectationSpec is one required path as its owner writes it. The adapter
+// turns it into an Expectation with ID "<SourceID>#<Name>", Kind
+// ExpectRequired and the entry's Origin.
+type ExpectationSpec struct {
+	// Name is unique in the file.
+	Name                  string           `json:"name"`
+	Sources               EndpointSelector `json:"sources"`
+	Destinations          EndpointSelector `json:"destinations"`
+	Ports                 []PortRange      `json:"ports"`
+	SourceQuantifier      Quantifier       `json:"sourceQuantifier"`
+	DestinationQuantifier Quantifier       `json:"destinationQuantifier"`
+}

@@ -6,7 +6,8 @@ package suiro.v1;
 
 import "suiro/v1/types.proto";
 
-// RendererService turns one source's files into Kubernetes objects.
+// RendererService turns one source's files into Kubernetes objects, plus
+// one object per entry of its expectations file (model.ExpectationsFile).
 service RendererService {
   // Render runs one job. Content problems come back as problems with no
   // objects; a gRPC error means the call itself failed.
