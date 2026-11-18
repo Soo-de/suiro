@@ -24,7 +24,8 @@ func main() {
 
 func run(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		usage(stderr)
+		// The usage error is what the caller acts on; a failed write to stderr adds nothing.
+		_ = usage(stderr)
 		return errUsage
 	}
 	switch args[0] {
@@ -32,19 +33,19 @@ func run(args []string, stdout, stderr io.Writer) error {
 		_, err := fmt.Fprintln(stdout, version.Version)
 		return err
 	case "help", "-h", "--help":
-		usage(stdout)
-		return nil
+		return usage(stdout)
 	default:
-		usage(stderr)
+		_ = usage(stderr)
 		return fmt.Errorf("unknown command %q", args[0])
 	}
 }
 
-func usage(w io.Writer) {
-	fmt.Fprint(w, `Usage: suiro <command>
+func usage(w io.Writer) error {
+	_, err := fmt.Fprint(w, `Usage: suiro <command>
 
 Commands:
   version   print the build version
   help      show this help
 `)
+	return err
 }
