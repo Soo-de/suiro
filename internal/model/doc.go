@@ -1,7 +1,8 @@
 // Package model holds the data types every layer shares. It has no behavior
-// beyond constructors and validation and imports nothing else from this
-// module, so collectors, the renderer, core, store and api can all depend on
-// it without depending on each other.
+// beyond constructors, validation and read-only accessors to its tables,
+// and imports nothing else from this module, so collectors, the renderer,
+// core, store and api can all depend on it without depending on each
+// other.
 //
 // The types fall into five groups:
 //

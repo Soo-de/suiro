@@ -1,5 +1,10 @@
 package model
 
+import (
+	"maps"
+	"slices"
+)
+
 // Object kinds the adapters translate or the collectors read.
 const (
 	KindNamespace     ObjectKind = "k8s:core/Namespace"
@@ -42,19 +47,26 @@ const (
 // an object under ConfigurationValues.
 type FieldPath string
 
-// KubeIdentityFields are kept for every Kubernetes object of any kind, so an
-// object outside KeptFields still shows up by identity (and is ignored,
-// flagged or warned about, never silently lost). Labels are not part of
-// identity: they are kept only where selectors read them.
-var KubeIdentityFields = []FieldPath{
+// The field whitelist and the kind lists below are security and
+// correctness tables, so they are unexported and read through functions
+// that return a copy: nothing can change them at run time.
+
+// KubeIdentityFields returns the fields kept for every Kubernetes object of
+// any kind, so an object outside KeptFields still shows up by identity (and
+// is ignored, flagged or warned about, never silently lost). Labels are not
+// part of identity: they are kept only where selectors read them.
+func KubeIdentityFields() []FieldPath { return slices.Clone(kubeIdentityFields) }
+
+var kubeIdentityFields = []FieldPath{
 	"apiVersion",
 	"kind",
 	"metadata.name",
 	"metadata.namespace",
 }
 
-// KeptFields is the field whitelist: for each kind, the only fields a stored
-// object keeps beyond KubeIdentityFields. The renderer applies it to every
+// KeptFields returns the field whitelist entry of kind: the only fields a
+// stored object of that kind keeps beyond KubeIdentityFields, and false
+// when kind has no entry. The renderer applies the whitelist to every
 // rendered object and every expectation entry, and cloud-collector to every
 // AWS object, before either leaves its service, so the server, the
 // database and the logs never see anything else.
@@ -65,9 +77,17 @@ var KubeIdentityFields = []FieldPath{
 // than the node-group ones, account IDs (OwnerId, UserIdGroupPairs[].UserId,
 // RequesterId) and ARNs, which carry account IDs.
 //
-// The AWS kinds listed here are also exactly what cloud-collector reads; an
-// AWS kind not listed is not read at all.
-var KeptFields = map[ObjectKind][]FieldPath{
+// The AWS kinds with an entry are also exactly what cloud-collector reads;
+// an AWS kind without one is not read at all.
+func KeptFields(kind ObjectKind) ([]FieldPath, bool) {
+	f, ok := keptFields[kind]
+	return slices.Clone(f), ok
+}
+
+// KeptKinds returns every kind KeptFields has an entry for, sorted.
+func KeptKinds() []ObjectKind { return slices.Sorted(maps.Keys(keptFields)) }
+
+var keptFields = map[ObjectKind][]FieldPath{
 	KindNamespace: {"metadata.labels"},
 	KindPod: {
 		"metadata.labels",
@@ -220,11 +240,13 @@ var cronJobTemplateKept = []FieldPath{
 	"spec.jobTemplate.spec.template.spec.containers[].ports",
 }
 
-// UnsupportedKinds are Kubernetes kinds that change what the network allows
-// but are outside the model. An adapter that meets one raises the mapped
-// reason; it never skips the object silently. They keep identity only,
-// except where KeptFields lists more.
-var UnsupportedKinds = map[ObjectKind]ReasonCode{
+// UnsupportedKinds returns the Kubernetes kinds that change what the
+// network allows but are outside the model, each with the reason an
+// adapter raises when it meets one; it never skips the object silently.
+// They keep identity only, except where KeptFields lists more.
+func UnsupportedKinds() map[ObjectKind]ReasonCode { return maps.Clone(unsupportedKinds) }
+
+var unsupportedKinds = map[ObjectKind]ReasonCode{
 	"k8s:crd.projectcalico.org/NetworkPolicy":                 ReasonPolicyKindUnsupported,
 	"k8s:crd.projectcalico.org/GlobalNetworkPolicy":           ReasonPolicyKindUnsupported,
 	"k8s:projectcalico.org/NetworkPolicy":                     ReasonPolicyKindUnsupported,
@@ -240,11 +262,14 @@ var UnsupportedKinds = map[ObjectKind]ReasonCode{
 	"k8s:crd.k8s.amazonaws.com/ENIConfig":          ReasonCustomNetworking,
 }
 
-// IgnoredKinds are Kubernetes kinds with no effect on network paths. Adapters
-// skip them without a warning because skipping them is the design, not an
-// accident. Every Kubernetes kind that is in none of KeptFields,
-// UnsupportedKinds and IgnoredKinds raises ReasonKindUnrecognized.
-var IgnoredKinds = []ObjectKind{
+// IgnoredKinds returns the Kubernetes kinds with no effect on network
+// paths. Adapters skip them without a warning because skipping them is the
+// design, not an accident. Every Kubernetes kind that is in none of
+// KeptFields, UnsupportedKinds and IgnoredKinds raises
+// ReasonKindUnrecognized.
+func IgnoredKinds() []ObjectKind { return slices.Clone(ignoredKinds) }
+
+var ignoredKinds = []ObjectKind{
 	"k8s:core/Secret",
 	"k8s:core/ConfigMap",
 	"k8s:core/ServiceAccount",
