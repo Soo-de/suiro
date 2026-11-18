@@ -3,7 +3,8 @@
 // platform repository. It watches the collectors through rpc.Collector,
 // fetches a snapshot only when an announced digest differs from the stored
 // one, stores reads, assembles a model.Bundle per baseline and per open
-// pull request, and calls core.Analyzer. It skips re-analysis when the
-// fingerprint of all inputs (snapshot digests, the before side, cluster
-// profile, rule-set version, tool version) is unchanged.
+// pull request, and calls core.Analyzer. It skips an analysis when one with
+// the same fingerprint is stored; the fingerprint covers the analysis kind,
+// environment and pull request as well as every input
+// (model.Bundle.Fingerprint).
 package inputs

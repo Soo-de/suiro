@@ -50,6 +50,9 @@ type ReadRecord struct {
 type AnalysisStore interface {
 	// FindAnalysis returns the ID of a stored analysis with this
 	// fingerprint, or ErrNotFound; inputs skips the work when one exists.
+	// The fingerprint covers the analysis kind, environment and pull
+	// request (model.Bundle.Fingerprint), so a match is always an analysis
+	// of the same kind and, for a pull request, of the same pull request.
 	FindAnalysis(ctx context.Context, fingerprint model.Digest) (model.AnalysisID, error)
 	// SaveAnalysis stores a and returns its new ID.
 	SaveAnalysis(ctx context.Context, a model.Analysis) (model.AnalysisID, error)
