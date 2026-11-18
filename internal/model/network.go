@@ -276,5 +276,8 @@ type ClusterProfile struct {
 	// does not matter when it has none.
 	NodeGroups []NodeGroup `json:"nodeGroups,omitempty"`
 	// Sources names, per JSON field name above, where its value came from.
+	// It is set in the merged profile an analysis assumed
+	// (Analysis.Profile); in an admin-entered profile every value is the
+	// admin's.
 	Sources map[string]ProfileSource `json:"sources,omitempty"`
 }
