@@ -32,8 +32,12 @@ type ReadStore interface {
 	// LatestReads returns the latest record of every ReadKey, for inputs to
 	// compare with what collectors announce after a restart.
 	LatestReads(ctx context.Context) ([]ReadRecord, error)
-	// Snapshot loads a stored snapshot by digest.
-	Snapshot(ctx context.Context, d model.Digest) (model.Snapshot, error)
+	// Snapshot loads the newest stored read of key whose digest is d: its
+	// own Key, PullRequest, Revision and read times, with Objects and
+	// Problems from the body stored once for d. Reads of other keys that
+	// share the digest never leak into the result. It returns ErrNotFound
+	// when key has no read with digest d.
+	Snapshot(ctx context.Context, key model.ReadKey, d model.Digest) (model.Snapshot, error)
 }
 
 // ReadRecord is a stored read without its body.
