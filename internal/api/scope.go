@@ -13,15 +13,15 @@ type ScopeFilter interface {
 	// resolve by rules alone.
 	Owner(source model.SourceID, object model.ObjectKey) model.Owner
 
-	// Filter fills the Owner of every endpoint, step and finding, and
-	// returns the part of a the caller may see, default deny:
+	// Filter fills the Owner of every endpoint and finding and the Owners
+	// of every step, and returns the part of a the caller may see, default
+	// deny:
 	//   - a ScopeAll caller sees everything;
 	//   - other callers see only endpoints, paths, changes and findings with
 	//     at least one end their scopes match;
-	//   - on those paths, steps whose members belong to other owners or to
-	//     nobody keep only their location (layer, direction, owner, ports and
-	//     outcome) and are marked Redacted; an AWS step also keeps its
-	//     resource IDs, never its rules;
+	//   - on those paths, every step is redacted member by member as
+	//     model.GateRef.Redacted defines: members of other owners or of
+	//     nobody lose their rules, and Kubernetes ones their IDs too;
 	//   - the outcome and verdict stay, so a developer still sees where a
 	//     path is blocked.
 	// Filter never changes a verdict and never reveals a hidden endpoint by
