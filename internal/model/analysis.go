@@ -33,7 +33,7 @@ const (
 	// step). It is never reported as clean.
 	AnalysisNoPreview AnalysisStatus = "no_preview"
 	// AnalysisFailed means Analyze returned an error. A failed analysis is
-	// stored and shown, but never reused: inputs analyses the same Bundle
+	// stored and shown, but never reused: inputs analyzes the same Bundle
 	// again rather than skip it.
 	AnalysisFailed AnalysisStatus = "failed"
 )

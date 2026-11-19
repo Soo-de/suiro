@@ -24,7 +24,7 @@ type Adapter interface {
 	// fragment, in model.IgnoredKinds, or as a Problem in the fragment with
 	// its reason (model.UnsupportedKinds, model.ReasonKindUnrecognized, an
 	// unparsable body); none is skipped silently. Translate returns an error
-	// only when it cannot run at all (a cancelled ctx, a snapshot of another
+	// only when it cannot run at all (a canceled ctx, a snapshot of another
 	// kind), never for content.
 	Translate(ctx context.Context, s model.Snapshot) (model.Fragment, error)
 }

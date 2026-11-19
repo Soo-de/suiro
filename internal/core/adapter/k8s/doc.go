@@ -1,6 +1,6 @@
 // Package k8s implements core.Adapter for rendered Kubernetes objects
 // (NetworkPolicy, workload pod templates, Service, Namespace). It restates
-// them as model gates whose semantics carry Kubernetes behaviour: a
+// them as model gates whose semantics carry Kubernetes behavior: a
 // NetworkPolicy is an isolating, additive, stateful filter (a pod that no
 // policy selects in a direction is open in that direction; once selected,
 // only what some policy allows passes), a Service a port transform.

@@ -1,4 +1,4 @@
-// Package inputs keeps the list of sources to analyse, loaded from the
+// Package inputs keeps the list of sources to analyze, loaded from the
 // registration file (model.RegistrationsFile) that Helm mounts from the
 // platform repository. It watches the collectors through rpc.Collector,
 // fetches a snapshot only when an announced digest differs from the stored
@@ -11,7 +11,7 @@
 // line of a baseline is store.AnalysisStore.LatestBaseline of its
 // environment; that of a pull request is LatestPullRequest of its
 // environment, repository and number. Comparing with the latest analysis
-// alone means a pull request that returns to an earlier state is analysed
+// alone means a pull request that returns to an earlier state is analyzed
 // again, so its latest result always matches its current inputs, and a
 // failed analysis is retried.
 package inputs

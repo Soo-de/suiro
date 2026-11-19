@@ -11,7 +11,7 @@ const (
 	OwnershipFileKind     = "OwnershipRules"
 )
 
-// RegistrationsFile lists the environments and the applications to analyse.
+// RegistrationsFile lists the environments and the applications to analyze.
 //
 //	apiVersion: suiro/v1
 //	kind: Registrations
@@ -45,7 +45,7 @@ type RegistrationsFile struct {
 	Applications []ApplicationSpec `json:"applications"`
 }
 
-// EnvironmentSpec is one environment. Each environment is analysed on its
+// EnvironmentSpec is one environment. Each environment is analyzed on its
 // own.
 type EnvironmentSpec struct {
 	Name string `json:"name"`

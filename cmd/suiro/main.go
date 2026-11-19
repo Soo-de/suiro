@@ -1,4 +1,4 @@
-// Command suiro is the CLI. It analyses a repository locally, or asks the
+// Command suiro is the CLI. It analyzes a repository locally, or asks the
 // server for a pull request's result, and prints JSON or a short table.
 package main
 

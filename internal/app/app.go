@@ -1,5 +1,5 @@
 // Package app wires each program from its config and runs it until the context
-// is cancelled. Mains only load config and call one Run function, so the
+// is canceled. Mains only load config and call one Run function, so the
 // all-in-one mode and end-to-end tests start the same code the services run.
 package app
 

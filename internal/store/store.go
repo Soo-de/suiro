@@ -170,7 +170,7 @@ type User struct {
 // for results within that application's scope, and it expires.
 type CIToken struct {
 	ID int64
-	// Prefix is the token's first characters, to recognise it in lists.
+	// Prefix is the token's first characters, to recognize it in lists.
 	Prefix    string
 	Hash      model.Digest
 	Owner     model.Owner

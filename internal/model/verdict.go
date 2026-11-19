@@ -23,7 +23,7 @@ const (
 	Unknown            Verdict = "unknown"
 )
 
-// Outcome is the three-valued judgement of one gate step, and of one class
+// Outcome is the three-valued judgment of one gate step, and of one class
 // pair's whole chain: 1, 0 or ⊥. A chain's outcome
 // is the strong Kleene AND of its steps: Block if any step blocks, else
 // Undetermined if any step is undetermined, else Pass.
@@ -113,7 +113,7 @@ type PathKey struct {
 
 // Path is the evaluation of one source/destination pair over one port
 // range whose ports all behave alike in every gate. The paths of a pair
-// partition both protocols' port space; neighbouring ranges with equal
+// partition both protocols' port space; neighboring ranges with equal
 // results are merged.
 type Path struct {
 	Key     PathKey `json:"key"`
