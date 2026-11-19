@@ -19,8 +19,14 @@ type ScopeFilter interface {
 	//   - a ScopeAll caller sees everything;
 	//   - other callers see only endpoints, paths, changes and findings with
 	//     at least one end their scopes match;
-	//   - on those paths, every step is redacted member by member as
-	//     model.GateRef.Redacted defines: members of other owners or of
+	//   - on a pull request analysis, a caller allowed to ask about that pull
+	//     request (one of its scopes matches the owner of a source registered
+	//     on the pull request's repository) also sees every Change and every
+	//     New finding, with the endpoints and paths they name, so a pull
+	//     request that breaks another team's required path tells its author
+	//     which expectation broke and who owns it;
+	//   - on every path a caller sees, each step is redacted member by member
+	//     as model.GateRef.Redacted defines: members of other owners or of
 	//     nobody lose their rules, and Kubernetes ones their IDs too;
 	//   - the outcome and verdict stay, so a developer still sees where a
 	//     path is blocked.
