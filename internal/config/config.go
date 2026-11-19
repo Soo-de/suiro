@@ -47,7 +47,7 @@ const (
 	defaultGRPCAddr = ":9090"
 )
 
-// LoadCommon reads the settings shared by every program, including the CLI.
+// LoadCommon reads the settings shared by every program.
 func LoadCommon(env Lookup) (Common, error) {
 	var level slog.Level
 	if err := level.UnmarshalText([]byte(get(env, "SUIRO_LOG_LEVEL", "info"))); err != nil {
