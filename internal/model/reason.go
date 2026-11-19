@@ -3,8 +3,8 @@ package model
 import "maps"
 
 // ReasonCode names why something was not judged normally. Every warning,
-// Undetermined step and Unknown verdict carries one. Codes travel as strings on every wire,
-// so a new code needs no proto change.
+// Undetermined step and Unknown verdict carries one. Codes travel as strings on every
+// wire, so a new code needs no proto change.
 type ReasonCode string
 
 // ReasonLevel is what a reason does to verdicts.
@@ -187,9 +187,7 @@ const (
 )
 
 // ReasonLevels returns every reason code with its level. Every declared
-// code has an entry; a code missing here is a bug. Like the tables in
-// fields.go, the table is unexported and read through a function that
-// returns a copy, so nothing can change a level at run time.
+// code has an entry; a code missing here is a bug. It returns a copy.
 func ReasonLevels() map[ReasonCode]ReasonLevel { return maps.Clone(reasonLevels) }
 
 var reasonLevels = map[ReasonCode]ReasonLevel{

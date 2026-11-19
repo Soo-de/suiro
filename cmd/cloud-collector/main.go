@@ -1,4 +1,5 @@
-// Command cloud-collector reads the AWS network read-only. It never sees PR content.
+// Command cloud-collector reads the AWS network read-only. It never sees pull
+// request content.
 package main
 
 import (

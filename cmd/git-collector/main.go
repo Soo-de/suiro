@@ -1,4 +1,5 @@
-// Command git-collector reads registered repositories for the server. It is the only service with GitHub credentials.
+// Command git-collector reads registered repositories for the server. It is
+// the only service with GitHub credentials.
 package main
 
 import (

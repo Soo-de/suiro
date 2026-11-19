@@ -1,4 +1,5 @@
-// Command renderer renders Helm charts, Kustomize overlays and plain YAML from untrusted PR content, without credentials or network.
+// Command renderer renders Helm charts, Kustomize overlays and plain YAML
+// from untrusted pull request content, without credentials or network.
 package main
 
 import (
