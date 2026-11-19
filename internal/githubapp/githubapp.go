@@ -21,8 +21,10 @@ type Signer interface {
 // TokenSource hands out installation tokens. The implementation here builds
 // the app JWT (issued 60 s in the past, valid 10 minutes), has its digest
 // signed by a Signer, and exchanges it for a token limited to one
-// repository with contents:read, cached in memory until shortly before it
-// expires (about an hour). Only git-collector holds a TokenSource.
+// repository with contents:read and pull_requests:read, enough to list open
+// pull requests and read their test merge commits, cached in memory until
+// shortly before it expires (about an hour). Only git-collector holds a
+// TokenSource.
 type TokenSource interface {
 	// Token returns a token for the repository at repoURL, reusing a cached
 	// one while it has time left.
