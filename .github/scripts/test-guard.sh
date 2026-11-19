@@ -4,9 +4,9 @@
 # PR carries the test-change-approved label. New test files are always fine.
 #
 # Expected results come from outside the code (documentation examples,
-# netpol-analyzer, lab measurements), so a failing test is first assumed to be
-# right. The label is given by the orchestrator only after checking that the
-# test itself was wrong, not that the code could not meet it.
+# netpol-analyzer, test cluster measurements), so a failing test is first assumed to be
+# right. The label is given only after review shows the test itself was
+# wrong, not that the code could not meet it.
 set -euo pipefail
 
 base="${BASE:?BASE must be the pull request base commit}"

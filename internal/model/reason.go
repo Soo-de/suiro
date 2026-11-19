@@ -3,8 +3,7 @@ package model
 import "maps"
 
 // ReasonCode names why something was not judged normally. Every warning,
-// Undetermined step and Unknown verdict carries one; the status guide lists
-// each code with what to do about it. Codes travel as strings on every wire,
+// Undetermined step and Unknown verdict carries one. Codes travel as strings on every wire,
 // so a new code needs no proto change.
 type ReasonCode string
 

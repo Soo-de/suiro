@@ -46,7 +46,7 @@ type RegistrationsFile struct {
 }
 
 // EnvironmentSpec is one environment. Each environment is analysed on its
-// own; the MVP runs one.
+// own.
 type EnvironmentSpec struct {
 	Name string `json:"name"`
 	// AWS is the network the environment runs in; nil for an environment
