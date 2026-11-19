@@ -22,9 +22,16 @@ const (
 	LevelPartial ReasonLevel = "partial"
 	// LevelInput means the inputs behind a path are incomplete, so its gates
 	// cannot be trusted: every path with an endpoint in the problem's scope
-	// is Unknown whatever its gates say, and the analysis is partial. The
-	// scope is the source's destination namespace for a git source and every
-	// path that crosses an AWS gate for an aws source.
+	// is Unknown whatever its gates say, and the analysis is partial.
+	//
+	// For an aws source the scope is every path that crosses an AWS gate.
+	// For a git source it is its destination namespace plus every namespace
+	// its objects declared (metadata.namespace) in its latest usable reads,
+	// which inputs supplies in Bundle.DeclaredNamespaces; so it also covers
+	// a ReasonConflictingResource object outside the destination
+	// namespaces. A namespace that the failing content writes into for the
+	// first time cannot be known: paths there keep the verdicts their gates
+	// give, and the analysis is AnalysisPartial with the source's reason.
 	LevelInput ReasonLevel = "input"
 	// LevelWarning is reported and changes no verdict.
 	LevelWarning ReasonLevel = "warning"
