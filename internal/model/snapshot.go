@@ -112,7 +112,10 @@ type Problem struct {
 	// EndpointKey, GateID or file path.
 	Subject string `json:"subject"`
 	// Message is detail for people. It never quotes a field outside
-	// KeptFields, so it cannot carry a Secret value into a log.
+	// KeptFields, so it cannot carry a Secret value into a log. The text is
+	// deterministic (repository-relative paths, no times, no temporary
+	// directories), so the same failure yields the same snapshot digest; a
+	// fixed source still changes the digest through its objects.
 	Message string  `json:"message,omitempty"`
 	Origin  *Origin `json:"origin,omitempty"`
 }
