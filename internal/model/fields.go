@@ -42,9 +42,18 @@ const (
 // elements of "name" whose Key field equals value (AWS tag lists). A path
 // that ends at an object or a list keeps it whole.
 //
-// One exception: aws:eks/Addon returns ConfigurationValues as a JSON or YAML
-// string. cloud-collector parses it and keeps only the listed sub-paths, as
-// an object under ConfigurationValues.
+// Two kept fields are reduced further:
+//   - aws:eks/Addon returns ConfigurationValues as a JSON or YAML string.
+//     cloud-collector parses it and keeps only the listed sub-paths, as an
+//     object under ConfigurationValues.
+//   - aws:ec2/NetworkInterface keeps Description only when it has one of the
+//     AWS-managed forms the aws adapter classifies interfaces by:
+//     "ELB app/<name>/<id>" (Application Load Balancer), "ELB net/<name>/<id>"
+//     (Network Load Balancer), "ELB <name>" (Classic Load Balancer) and
+//     "RDSNetworkInterface" (RDS), where <name> is 1 to 32 letters, digits
+//     and hyphens and <id> is 16 hex digits. cloud-collector drops any other
+//     Description: an ECS task's interface carries there an ARN with the
+//     account ID, and an interface someone made carries free text.
 type FieldPath string
 
 // The field whitelist and the kind lists below are security and
@@ -157,6 +166,7 @@ var keptFields = map[ObjectKind][]FieldPath{
 		"Routes[].State",
 		"Routes[].Origin",
 	},
+	// Description is kept only in the forms FieldPath lists.
 	KindNetworkInterface: {
 		"NetworkInterfaceId", "SubnetId", "VpcId",
 		"InterfaceType", "RequesterManaged", "Description",
