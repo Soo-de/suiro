@@ -183,7 +183,7 @@ type Interface struct {
 }
 
 // NATGateway is an AWS NAT gateway. A public one lets its subnet's
-// neighbours reach the internet and accepts nothing initiated from outside.
+// neighbors reach the internet and accepts nothing initiated from outside.
 type NATGateway struct {
 	ID        string       `json:"id"`
 	Subnet    string       `json:"subnet"`

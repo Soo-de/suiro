@@ -25,7 +25,7 @@ type Renderer interface {
 	// path) ends the job with one input-level Problem and no objects,
 	// expectation entries included: half a render is never returned.
 	// The error is only for failures of the call itself, such as an
-	// unreachable renderer or a cancelled ctx.
+	// unreachable renderer or a canceled ctx.
 	Render(ctx context.Context, req RenderRequest) (RenderResult, error)
 }
 
