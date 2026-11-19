@@ -114,7 +114,10 @@ type RuleRevision struct {
 }
 
 // Exception is a time-limited permission for one forbidden path or object.
-// It is matched to findings when results are read, by Rule and Subject.
+// It is matched to findings when results are read, by Rule and Subject
+// (model.Finding.Subject): for a forbidden path the PathKey string, so an
+// exception covers that one path, and another path that breaks the same
+// rule still warns.
 type Exception struct {
 	ID          int64
 	Rule        string

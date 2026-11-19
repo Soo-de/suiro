@@ -283,17 +283,32 @@ const (
 // Finding is an expectation or check that is not satisfied. Exceptions are
 // not applied here: they are matched when results are read, so an expired
 // exception warns again without a new analysis.
+//
+// A forbidden expectation yields one finding per path it covers that is not
+// satisfied, so a pull request that opens a new forbidden path warns even
+// when the same rule is already violated elsewhere, and an exception for one
+// path matches that path's finding alone. A required expectation, and an
+// expectation whose selectors pick nothing, yields one finding for the
+// whole expectation.
 type Finding struct {
 	Kind FindingKind `json:"kind"`
 	// Rule is the expectation or hygiene rule ID.
 	Rule string `json:"rule"`
-	// Subject is the PathKey string, ObjectKey or expectation Origin the
-	// finding is about; exceptions match it.
-	Subject string            `json:"subject"`
-	Status  ExpectationStatus `json:"status"`
+	// Subject is what the finding is about; exceptions match it: the
+	// covered path's PathKey string for a forbidden expectation, the
+	// expectation ID for a required or unmatched one, and the ObjectKey for
+	// a hygiene check.
+	Subject string `json:"subject"`
+	// Status of a forbidden expectation's finding is that one path's
+	// status: the ExpectationStatus rule applied to the path alone.
+	Status ExpectationStatus `json:"status"`
 	// New means the status got worse than on the before side (satisfied →
-	// unverifiable → violated). Only new findings warn on a pull request;
-	// the rest are existing problems listed on the open issues page.
+	// unverifiable → violated). For a forbidden expectation it is judged
+	// over ports cut where either side's paths are, as Changes cuts them:
+	// the finding is New when some piece of its path's port range within the
+	// expectation's Ports had a better status on the before side. Only new
+	// findings warn on a pull request; the rest are existing problems listed
+	// on the open issues page.
 	New     bool         `json:"new"`
 	Paths   []PathKey    `json:"paths,omitempty"`
 	Reasons []ReasonCode `json:"reasons,omitempty"`
