@@ -1,4 +1,4 @@
-# Local AI context: holds vault paths and personal context, never committed
+# Local editor and assistant settings
 CLAUDE.md
 CLAUDE.local.md
 .claude/

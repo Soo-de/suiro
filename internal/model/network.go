@@ -233,7 +233,7 @@ type Taint struct {
 }
 
 // Toggle is a three-valued setting: on, off or unknown. Unknown is never
-// read as either: the design forbids assuming an empty field.
+// read as either: an empty field is never taken as a setting.
 type Toggle string
 
 const (

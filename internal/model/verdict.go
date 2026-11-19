@@ -24,7 +24,7 @@ const (
 )
 
 // Outcome is the three-valued judgement of one gate step, and of one class
-// pair's whole chain: 1, 0 or ⊥ in the report's notation. A chain's outcome
+// pair's whole chain: 1, 0 or ⊥. A chain's outcome
 // is the strong Kleene AND of its steps: Block if any step blocks, else
 // Undetermined if any step is undetermined, else Pass.
 type Outcome string

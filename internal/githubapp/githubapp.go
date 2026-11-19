@@ -7,8 +7,8 @@ import (
 
 // Signer signs with the GitHub App's private key without exposing it. It is
 // not a separate service: an implementation inside git-collector either
-// signs with the key file mounted from a Secret (the lab) or asks AWS KMS,
-// where the key cannot be exported and every signature is logged in
+// signs with the key file mounted from a Secret (a test cluster) or asks AWS
+// KMS, where the key cannot be exported and every signature is logged in
 // CloudTrail (EKS). Helm values choose one (signer: file | kms); the code
 // using it is the same.
 type Signer interface {
