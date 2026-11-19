@@ -18,12 +18,11 @@ const (
 )
 
 // AnalysisStatus is a stored analysis's state; the values match the
-// database's.
+// database's. An analysis is stored only once it has finished, so no stored
+// analysis is ever running.
 type AnalysisStatus string
 
 const (
-	// AnalysisRunning is set by store while an analysis is computed.
-	AnalysisRunning AnalysisStatus = "running"
 	// AnalysisDone means every input was usable.
 	AnalysisDone AnalysisStatus = "done"
 	// AnalysisPartial means some input-level or partial-level reason holds;
@@ -33,7 +32,9 @@ const (
 	// only what no source previews (a Terraform-only change without the CLI
 	// step). It is never reported as clean.
 	AnalysisNoPreview AnalysisStatus = "no_preview"
-	// AnalysisFailed means Analyze returned an error.
+	// AnalysisFailed means Analyze returned an error. A failed analysis is
+	// stored and shown, but never reused: inputs analyses the same Bundle
+	// again rather than skip it.
 	AnalysisFailed AnalysisStatus = "failed"
 )
 
@@ -68,11 +69,11 @@ type Bundle struct {
 	// added since Before reports what was already violated as existing,
 	// not new.
 	Before *Analysis `json:"before,omitempty"`
-	// Fingerprint identifies what the Bundle yields: two Bundles with the
-	// same fingerprint give the same Analysis, so inputs skips the analysis
-	// when one with this fingerprint is stored. It is the SHA-256 of the
-	// JSON encoding of every other field of the Bundle, lists in the order
-	// stated above, with these reductions:
+	// Fingerprint identifies what the Bundle yields. inputs skips the
+	// analysis when the latest analysis of the same baseline or pull request
+	// has this fingerprint and a finished status (see package inputs). It is
+	// the SHA-256 of the JSON encoding of every other field of the Bundle,
+	// lists in the order stated above, with these reductions:
 	//   - PullRequest keeps only RepoURL and Number, so a new commit that
 	//     changes no input reuses the stored analysis;
 	//   - each snapshot keeps only its Key and Digest, which covers its
@@ -80,12 +81,17 @@ type Bundle struct {
 	//   - each problem keeps only Reason and Subject, so detail text that
 	//     differs between attempts forces no new analysis;
 	//   - Rules keeps only Version, which names its content;
-	//   - Before keeps only its Fingerprint, empty when Before is nil.
+	//   - for a pull request, Before keeps only its Fingerprint, empty when
+	//     Before is nil; a baseline leaves Before out, because its Before is
+	//     the latest baseline, the very analysis the skip compares it with.
 	//
-	// Kind, Environment and the pull request's identity are part of it, so
-	// a baseline never shares a fingerprint with a pull request analysis,
-	// nor one pull request with another, however alike their inputs. A
-	// field added to Bundle is added to the fingerprint.
+	// So two Bundles with the same fingerprint give the same endpoints,
+	// paths and findings, and for a pull request the same Changes too; a
+	// baseline's Base, Changes and the New mark of its findings follow its
+	// own Before. Kind, Environment and the pull request's identity are part
+	// of it, so a baseline never shares a fingerprint with a pull request
+	// analysis, nor one pull request with another, however alike their
+	// inputs. A field added to Bundle is added to the fingerprint.
 	Fingerprint Digest `json:"fingerprint"`
 	ToolVersion string `json:"toolVersion"`
 }
