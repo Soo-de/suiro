@@ -7,8 +7,9 @@ import (
 )
 
 // Analyzer is the engine's entry point. inputs calls it in the server for
-// every new input fingerprint; the CLI calls it in process on a local
-// directory. It performs no I/O: everything it reads is in the Bundle.
+// every Bundle it does not skip (see package inputs); the CLI calls it in
+// process on a local directory. It performs no I/O: everything it reads is
+// in the Bundle.
 type Analyzer interface {
 	// Analyze computes one analysis:
 	//

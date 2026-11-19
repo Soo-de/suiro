@@ -51,22 +51,22 @@ type ReadRecord struct {
 	LastCompleteReadAt time.Time
 }
 
-// AnalysisStore keeps analyses with their paths, changes and findings.
+// AnalysisStore keeps analyses with their paths, changes and findings. An
+// analysis is stored once it has finished, failed ones included. inputs
+// decides whether to skip an analysis from LatestBaseline and
+// LatestPullRequest (see package inputs).
 type AnalysisStore interface {
-	// FindAnalysis returns the ID of a stored analysis with this
-	// fingerprint, or ErrNotFound; inputs skips the work when one exists.
-	// The fingerprint covers the analysis kind, environment and pull
-	// request (model.Bundle.Fingerprint), so a match is always an analysis
-	// of the same kind and, for a pull request, of the same pull request.
-	FindAnalysis(ctx context.Context, fingerprint model.Digest) (model.AnalysisID, error)
 	// SaveAnalysis stores a and returns its new ID.
 	SaveAnalysis(ctx context.Context, a model.Analysis) (model.AnalysisID, error)
 	Analysis(ctx context.Context, id model.AnalysisID) (model.Analysis, error)
 	// LatestBaseline returns the environment's newest baseline whose status
 	// is AnalysisDone or AnalysisPartial.
 	LatestBaseline(ctx context.Context, environment string) (model.Analysis, error)
-	// LatestPullRequest returns the newest analysis of one pull request.
-	LatestPullRequest(ctx context.Context, repoURL string, number int) (model.Analysis, error)
+	// LatestPullRequest returns the newest analysis of one pull request in
+	// environment, whatever its status. One pull request can feed several
+	// environments, because registrations in several environments can read
+	// the same repository.
+	LatestPullRequest(ctx context.Context, environment, repoURL string, number int) (model.Analysis, error)
 }
 
 // RuleStore keeps forbidden-path rules, hygiene checks and exceptions,
