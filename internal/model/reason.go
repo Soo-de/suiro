@@ -1,5 +1,7 @@
 package model
 
+import "maps"
+
 // ReasonCode names why something was not judged normally. Every warning,
 // Undetermined step and Unknown verdict carries one; the status guide lists
 // each code with what to do about it. Codes travel as strings on every wire,
@@ -178,9 +180,13 @@ const (
 	ReasonExpectationsInvalid ReasonCode = "expectations-invalid"
 )
 
-// ReasonLevels gives every reason code its level. Every declared code has
-// an entry; a code missing here is a bug.
-var ReasonLevels = map[ReasonCode]ReasonLevel{
+// ReasonLevels returns every reason code with its level. Every declared
+// code has an entry; a code missing here is a bug. Like the tables in
+// fields.go, the table is unexported and read through a function that
+// returns a copy, so nothing can change a level at run time.
+func ReasonLevels() map[ReasonCode]ReasonLevel { return maps.Clone(reasonLevels) }
+
+var reasonLevels = map[ReasonCode]ReasonLevel{
 	ReasonPolicyEnforcementUnknown: LevelGate,
 	ReasonHostNetwork:              LevelGate,
 	ReasonStandalonePod:            LevelGate,
