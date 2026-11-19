@@ -16,14 +16,14 @@ type Renderer interface {
 	// Render returns the request's objects reduced to their kept fields
 	// (model.KeptFields plus model.KubeIdentityFields, see
 	// model.Object.Body), in output order, with any warnings
-	// (model.ReasonNamespaceMismatch). After them come the entries of the expectations file at the top of
-	// Path (model.ExpectationsFile), one model.KindExpectation object each,
-	// when the file exists; a file that does not validate adds a
-	// model.ReasonExpectationsInvalid warning instead and never fails the
-	// job. A problem with the content itself (a template error, a timeout,
-	// a limit, a refused remote resource, a bad path) ends the job with one
-	// input-level Problem and no objects, expectation entries included:
-	// half a render is never returned.
+	// (model.ReasonNamespaceMismatch). After them come the entries of the
+	// expectations file at the top of Path (model.ExpectationsFile), one
+	// model.KindExpectation object each, when the file exists; a file that
+	// does not validate adds a model.ReasonExpectationsInvalid warning
+	// instead and never fails the job. A problem with the content itself (a
+	// template error, a timeout, a limit, a refused remote resource, a bad
+	// path) ends the job with one input-level Problem and no objects,
+	// expectation entries included: half a render is never returned.
 	// The error is only for failures of the call itself, such as an
 	// unreachable renderer or a cancelled ctx.
 	Render(ctx context.Context, req RenderRequest) (RenderResult, error)

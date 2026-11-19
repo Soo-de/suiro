@@ -1,4 +1,5 @@
-// Command server is the user-facing server: HTTP/JSON API, embedded UI and analysis. It holds only the database connection.
+// Command server is the user-facing server: HTTP/JSON API, embedded UI and
+// analysis. It holds only the database connection.
 package main
 
 import (

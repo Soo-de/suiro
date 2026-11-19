@@ -56,10 +56,6 @@ const (
 //     account ID, and an interface someone made carries free text.
 type FieldPath string
 
-// The field whitelist and the kind lists below are security and
-// correctness tables, so they are unexported and read through functions
-// that return a copy: nothing can change them at run time.
-
 // KubeIdentityFields returns the fields kept for every Kubernetes object of
 // any kind, so an object outside KeptFields still shows up by identity (and
 // is ignored, flagged or warned about, never silently lost). Labels are not
@@ -78,7 +74,9 @@ var kubeIdentityFields = []FieldPath{
 // when kind has no entry. The renderer applies the whitelist to every
 // rendered object and every expectation entry, and cloud-collector to every
 // AWS object, before either leaves its service, so the server, the
-// database and the logs never see anything else.
+// database and the logs never see anything else. The whitelist is
+// unexported and read through functions that return a copy, so nothing can
+// change it at run time.
 //
 // What it leaves out on purpose: Secret and ConfigMap data, container env,
 // envFrom, command, args and images, annotations (they can hold anything,
