@@ -77,7 +77,7 @@ type Bundle struct {
 	// for a baseline the previous one; nil on first install, when every path
 	// counts as new. Core re-checks Rules against Before.Paths, so a rule
 	// added since Before reports what was already violated as existing,
-	// not new.
+	// not new. Like every stored analysis it holds path summaries only.
 	Before *Analysis `json:"before,omitempty"`
 	// Fingerprint identifies what the Bundle yields. inputs skips the
 	// analysis when the latest analysis of the same baseline or pull request
@@ -132,18 +132,24 @@ type Analysis struct {
 	Inputs         []SnapshotRef `json:"inputs"`
 	// Profile is the merged cluster profile the verdicts assumed, with the
 	// source of each value.
-	Profile    ClusterProfile `json:"profile"`
-	Endpoints  []Endpoint     `json:"endpoints"`
-	Paths      []Path         `json:"paths"`
-	Changes    []Change       `json:"changes,omitempty"`
-	Findings   []Finding      `json:"findings,omitempty"`
-	Problems   []Problem      `json:"problems,omitempty"`
-	Unexamined []Unexamined   `json:"unexamined"`
+	Profile   ClusterProfile `json:"profile"`
+	Endpoints []Endpoint     `json:"endpoints"`
+	// Paths are computed for every ordered pair of two different endpoints
+	// with at least one workload end, and from the internet and external
+	// private networks to AWS resources, which forbidden rules ask about.
+	// Pairs between AWS resources, between the internet and external private
+	// networks, and from an endpoint to itself are not computed.
+	Paths      []Path       `json:"paths"`
+	Changes    []Change     `json:"changes,omitempty"`
+	Findings   []Finding    `json:"findings,omitempty"`
+	Problems   []Problem    `json:"problems,omitempty"`
+	Unexamined []Unexamined `json:"unexamined"`
 }
 
-// Validate reports the first broken invariant of a, or nil: every path has
-// at least one class result, and its Verdict follows from its class
-// outcomes and Reasons as Verdict defines.
+// Validate reports the first broken invariant of a, or nil: every path's
+// class pair counts sum to at least one and agree with its Verdict and
+// Reasons as Verdict defines, and every list is in canonical order (see the
+// package comment).
 func (a Analysis) Validate() error {
 	panic("model: Analysis.Validate is not implemented")
 }
@@ -184,12 +190,16 @@ const (
 	QuantifyAny Quantifier = "any"
 )
 
-// EndpointSelector picks endpoints: the union of every listed form. A
-// selector that picks nothing is an error (FindingUnmatched), never a
-// silently satisfied expectation.
+// EndpointSelector picks endpoints: the union of every listed form. Every
+// form must pick something: a form that picks nothing, such as an Endpoints
+// key the analysis does not have, makes the expectation a FindingUnmatched,
+// never a silently narrower or satisfied one.
 type EndpointSelector struct {
 	// All picks every endpoint.
 	All bool `json:"all,omitempty"`
+	// ResourceKinds picks every AWS resource of these kinds, so a built-in
+	// forbidden rule can name every database.
+	ResourceKinds []ResourceKind `json:"resourceKinds,omitempty"`
 	// Internet picks EndpointInternet.
 	Internet  bool          `json:"internet,omitempty"`
 	Endpoints []EndpointKey `json:"endpoints,omitempty"`
@@ -285,7 +295,9 @@ type RuleSet struct {
 // forbidden one Pass. A path that an input-level reason covers can neither
 // satisfy nor violate an expectation; alone, it leaves it unverifiable.
 // When S or D is empty nothing is evaluated: the expectation yields a
-// FindingUnmatched whose Status is Unverifiable, never Satisfied.
+// FindingUnmatched whose Status is Unverifiable, never Satisfied. Pairs with
+// s = d are left out, as no path is computed for them; when no pair is
+// left, the expectation is Unverifiable.
 //
 // When Destinations names a Service, D is its backend workloads, taken with
 // ∀ whatever DestinationQuantifier says, because the Service may send a

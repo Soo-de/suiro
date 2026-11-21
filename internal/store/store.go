@@ -25,6 +25,10 @@ type Store interface {
 
 // ReadStore keeps collectors' reads. Snapshot bodies are stored once per
 // digest; history comes from here because neither GitHub nor AWS keeps it.
+// A body that the baseline in force or the latest analysis of an open pull
+// request rests on is never removed, so core.Analyzer.Explain can rebuild
+// that analysis's Bundle; once retention removes an older body, Snapshot
+// returns ErrNotFound and that analysis's detail is no longer available.
 type ReadStore interface {
 	// SaveRead records a complete read. When the latest read of the same key
 	// has the same digest, only its LastCompleteReadAt moves.
@@ -67,6 +71,45 @@ type AnalysisStore interface {
 	// environments, because registrations in several environments can read
 	// the same repository.
 	LatestPullRequest(ctx context.Context, environment, repoURL string, number int) (model.Analysis, error)
+	// Paths returns one page of the paths of analysis id that f keeps, in
+	// canonical order (see package model), after p.After. It returns
+	// ErrNotFound when the analysis does not exist.
+	Paths(ctx context.Context, id model.AnalysisID, f PathFilter, p Page) (PathPage, error)
+}
+
+// PathFilter narrows the paths of one analysis: a zero field keeps every
+// path, and the set fields must all hold.
+type PathFilter struct {
+	// Namespaces keeps paths with a workload end in one of them.
+	Namespaces []string
+	// NodeGroups keeps paths with an end that has a placement class in one
+	// of them.
+	NodeGroups []string
+	// Endpoint keeps paths with this endpoint at either end.
+	Endpoint model.EndpointKey
+	// Source, Destination and Ports ask about one path: Source and
+	// Destination must equal the key's, and Ports must overlap its range.
+	Source      model.EndpointKey
+	Destination model.EndpointKey
+	Ports       *model.PortRange
+	// Verdicts keeps paths with one of these verdicts.
+	Verdicts []model.Verdict
+}
+
+// Page is a position in a list of paths.
+type Page struct {
+	// After is the key of the last path already read; the zero key starts
+	// at the first path.
+	After model.PathKey
+	// Limit is the most paths to return; 0 means the store's default.
+	Limit int
+}
+
+// PathPage is one page of paths.
+type PathPage struct {
+	Paths []model.Path
+	// More says that more paths follow the last one returned.
+	More bool
 }
 
 // RuleStore keeps forbidden-path rules, hygiene checks and exceptions,

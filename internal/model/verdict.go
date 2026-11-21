@@ -161,20 +161,50 @@ type PathKey struct {
 	Ports       PortRange   `json:"ports"`
 }
 
-// Path is the evaluation of one source/destination pair over one port
-// range whose ports all behave alike in every gate. The paths of a pair
-// partition both protocols' port space; neighboring ranges with equal
-// results are merged.
+// String returns k's one written form, "<source> → <destination> :
+// <protocol>/<from>[-<to>]", with "-<to>" left out for a single port
+// ("tcp/5432"). Finding.Subject and exceptions match this exact text.
+func (k PathKey) String() string {
+	panic("model: PathKey.String is not implemented")
+}
+
+// ParsePathKey is the inverse of PathKey.String. It accepts only that form,
+// so ParsePathKey(k.String()) returns k for every valid k, and it errors on
+// anything else ("tcp/5432-5432" included).
+func ParsePathKey(s string) (PathKey, error) {
+	panic("model: ParsePathKey is not implemented")
+}
+
+// Path is the summary of one source/destination pair over one port range
+// whose ports all behave alike in every gate. The paths of a pair partition
+// both protocols' port space; neighboring ranges with equal results are
+// merged. The chains behind it are not stored: core.Analyzer.Explain
+// recomputes them as a PathDetail from the same Bundle.
 type Path struct {
 	Key     PathKey `json:"key"`
 	Verdict Verdict `json:"verdict"`
+	// Reasons are the reason codes behind an Unknown verdict or an
+	// Undetermined step, sorted and without repeats.
+	Reasons []ReasonCode `json:"reasons,omitempty"`
+	// OpenPairs, ClosedPairs and UndeterminedPairs count the path's class
+	// pairs by outcome (Pass, Block, Undetermined). Their sum is never 0
+	// (see Endpoint.Classes).
+	OpenPairs         int `json:"openPairs"`
+	ClosedPairs       int `json:"closedPairs"`
+	UndeterminedPairs int `json:"undeterminedPairs"`
+}
+
+// PathDetail is one path with its chains. Its Key, Verdict and Reasons
+// equal those of the path's summary, and its Classes counted by outcome
+// equal the summary's counts.
+type PathDetail struct {
+	Key     PathKey      `json:"key"`
+	Verdict Verdict      `json:"verdict"`
+	Reasons []ReasonCode `json:"reasons,omitempty"`
 	// Classes holds one result per class pair, so PlacementDependent can
 	// name where the path is open and where it is closed. It is never empty
 	// (see Endpoint.Classes).
 	Classes []ClassResult `json:"classes"`
-	// Reasons are the reason codes behind an Unknown verdict or an
-	// Undetermined step, sorted and without repeats.
-	Reasons []ReasonCode `json:"reasons,omitempty"`
 }
 
 // ClassResult is the chain of one class pair.
