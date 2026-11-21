@@ -15,6 +15,13 @@ import "net/netip"
 // expectation-level one (see the package comment). Allow reads "every
 // examined gate allows it in every possible placement", never "the
 // connection works": Analysis.Unexamined lists what was not looked at.
+//
+// A verdict is about the network layer alone. Deny is final: no identity
+// layer (IAM, mTLS, tokens) opens what the network closes. Allow is an upper
+// bound such a layer may still narrow; it stays a finding for security,
+// because the network is the last barrier when identity is misconfigured or
+// leaked. Identity layers can thus make Allow overstate what is open, never
+// make Deny overstate what is closed.
 type Verdict string
 
 const (
