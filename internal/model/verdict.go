@@ -148,6 +148,13 @@ type ClassPair struct {
 // PathKey identifies a path across analyses: source, destination and a
 // port range of one protocol. Its string form, "<source> → <destination> :
 // <protocol>/<from>[-<to>]", is the connection key of stored changes.
+//
+// The ports are destination container ports: what NetworkPolicy and
+// Security Groups see once a Service has translated the connection. Every
+// step is judged on them, the source's egress included, because the
+// translation happens at the source. A Service port shows only in a
+// Service step (GateResult.Mappings) and in an expectation that names a
+// Service.
 type PathKey struct {
 	Source      EndpointKey `json:"source"`
 	Destination EndpointKey `json:"destination"`
@@ -175,7 +182,11 @@ type ClassResult struct {
 	Pair    ClassPair `json:"pair"`
 	Outcome Outcome   `json:"outcome"`
 	// Gates is the chain in path order. Every step is evaluated, not only
-	// up to the first block, so a Deny lists every blocking step.
+	// up to the first block, so a Deny lists every blocking step. A Service
+	// step (GateTransform) appears where a Service that selects the
+	// destination maps a port onto the path's port; it passes. An SNAT step
+	// appears only with an AWS layer, on traffic from a pod that leaves the
+	// VPC.
 	Gates []GateResult `json:"gates"`
 }
 
@@ -216,6 +227,14 @@ type GateResult struct {
 	Rules []RuleRef `json:"rules,omitempty"`
 	// Reason is set when Outcome is Undetermined.
 	Reason ReasonCode `json:"reason,omitempty"`
+	// Mappings is set on a Service step: the Service ports that lead to the
+	// path's port, so a reader sees 80→8080.
+	Mappings []PortMapping `json:"mappings,omitempty"`
+	// TranslatedTo is set on an SNAT step: the addresses and Security Groups
+	// the source takes from there on (its node's, or the NAT gateway's).
+	// Every later step judges the source by them, so workloads behind the
+	// same address look alike to it.
+	TranslatedTo *PlacementClass `json:"translatedTo,omitempty"`
 }
 
 // RuleRef points at one deciding rule.

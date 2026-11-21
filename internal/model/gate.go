@@ -214,7 +214,9 @@ type Route struct {
 }
 
 // PortMapping is one Service port: connections to Port reach the selected
-// pods on TargetPort, or on the container port named TargetPortName.
+// pods on TargetPort, or on the container port named TargetPortName, which
+// can resolve to a different number on each selected workload. With neither
+// set the target port is Port, the Kubernetes default.
 type PortMapping struct {
 	Name           string   `json:"name,omitempty"`
 	Protocol       Protocol `json:"protocol"`

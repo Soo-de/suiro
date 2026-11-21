@@ -214,6 +214,7 @@ var keptFields = map[ObjectKind][]FieldPath{
 		"ConfigurationValues.enableNetworkPolicy",
 		"ConfigurationValues.env.NETWORK_POLICY_ENFORCING_MODE",
 		"ConfigurationValues.env.AWS_VPC_K8S_CNI_EXTERNALSNAT",
+		"ConfigurationValues.env.AWS_VPC_K8S_CNI_EXCLUDE_SNAT_CIDRS",
 		"ConfigurationValues.env.ENABLE_POD_ENI",
 		"ConfigurationValues.env.AWS_VPC_K8S_CNI_CUSTOM_NETWORK_CFG",
 		"ConfigurationValues.env.ENABLE_PREFIX_DELEGATION",

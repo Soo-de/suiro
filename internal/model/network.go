@@ -275,9 +275,16 @@ type ClusterProfile struct {
 	NetworkPolicyMode string `json:"networkPolicyMode,omitempty"`
 	PodSecurityGroups Toggle `json:"podSecurityGroups,omitempty"`
 	// ExternalSNAT off (the VPC CNI default) means pod traffic leaving the
-	// VPC takes the node's address and Security Groups.
-	ExternalSNAT     Toggle `json:"externalSNAT,omitempty"`
-	CustomNetworking Toggle `json:"customNetworking,omitempty"`
+	// VPC takes the node's address and Security Groups, except toward
+	// ExcludeSNATCIDRs; on means it keeps the pod's address. Unknown makes
+	// the steps after the VPC boundary Undetermined (ReasonSNATUnknown).
+	ExternalSNAT Toggle `json:"externalSNAT,omitempty"`
+	// ExcludeSNATCIDRs are destinations outside the VPC toward which the VPC
+	// CNI does not translate (AWS_VPC_K8S_CNI_EXCLUDE_SNAT_CIDRS, for
+	// peered or transit networks). It is read with ExternalSNAT, so when
+	// that is known an empty list means none.
+	ExcludeSNATCIDRs []netip.Prefix `json:"excludeSNATCIDRs,omitempty"`
+	CustomNetworking Toggle         `json:"customNetworking,omitempty"`
 	// EphemeralPorts are the client ports pods use for outgoing
 	// connections, which stateless filters must let back in. Nil means the
 	// Linux default 32768-60999.
