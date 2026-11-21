@@ -50,7 +50,8 @@ type RegistrationsFile struct {
 type EnvironmentSpec struct {
 	Name string `json:"name"`
 	// AWS is the network the environment runs in; nil for an environment
-	// without an AWS layer, whose results list UnexaminedAWSLayer.
+	// without an AWS layer, whose results list UnexaminedAWSLayer and whose
+	// workloads each have the single class ClassCluster.
 	AWS *AWSSource `json:"aws,omitempty"`
 }
 

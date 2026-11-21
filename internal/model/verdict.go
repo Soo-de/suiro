@@ -45,12 +45,25 @@ const (
 
 // EndpointKey identifies a node of the graph across analyses: a workload's
 // controller ObjectKey ("k8s:apps/Deployment/payments/api"), an AWS
-// resource's key ("aws:database/orders-db"), or EndpointInternet. Paths and
-// changes are keyed by it, never by IP address.
+// resource's key ("aws:database/orders-db"), EndpointInternet,
+// EndpointExternalPrivate, or a named private network's
+// "external-private:<name>". Paths and changes are keyed by it, never by IP
+// address.
 type EndpointKey string
 
-// EndpointInternet is the internet: every IPv4 address outside the VPCs.
-const EndpointInternet EndpointKey = "internet"
+const (
+	// EndpointInternet is the public IPv4 space: every address outside
+	// SpecialPurposeIPv4, ClusterProfile.NotInternet and the VPCs. A
+	// private source address cannot arrive through an internet gateway, so
+	// private ranges are never the internet.
+	EndpointInternet EndpointKey = "internet"
+	// EndpointExternalPrivate is every private address outside the cluster
+	// and the VPCs that no ClusterProfile.PrivateNetworks entry names: the
+	// addresses of PrivateIPv4 and ClusterProfile.NotInternet, less the VPC
+	// CIDRs, ClusterProfile.PodCIDRs and the named networks. Without it a
+	// rule for an internal range such as 10.0.0.0/8 would face no endpoint.
+	EndpointExternalPrivate EndpointKey = "external-private"
+)
 
 // EndpointKind is what an endpoint is.
 type EndpointKind string
@@ -59,6 +72,9 @@ const (
 	EndpointKindWorkload EndpointKind = "workload"
 	EndpointKindResource EndpointKind = "aws-resource"
 	EndpointKindInternet EndpointKind = "internet"
+	// EndpointKindExternalPrivate is EndpointExternalPrivate or a named
+	// private network.
+	EndpointKindExternalPrivate EndpointKind = "external-private"
 )
 
 // Endpoint is a graph node with its resolved placement classes.
@@ -69,8 +85,11 @@ type Endpoint struct {
 	Namespace string       `json:"namespace,omitempty"`
 	// Classes are the places the endpoint can be: for a workload one per
 	// (node group, subnet, address part) its constraints allow, for an AWS
-	// resource one per interface, for the internet one per address part.
-	// There is always at least one, so no path rests on zero class pairs:
+	// resource one per interface, for the internet and external private
+	// networks one per address part. In an environment without an AWS layer
+	// a workload has the single class ClassCluster, whose Addresses are
+	// ClusterProfile.PodCIDRs (none when unknown): node and subnet change no
+	// verdict there. There is always at least one, so no path rests on zero class pairs:
 	// a workload whose constraints match no node group, or whose placement
 	// cannot be told, has the single class ClassUnknown, and core adds an
 	// Undetermined endpoint step to its paths (ReasonNoPlacement,
@@ -92,13 +111,15 @@ type Endpoint struct {
 // PlacementDependent.
 type PlacementClass struct {
 	// Name is a short label for people: "<node group>/<subnet>",
-	// "<interface>", "internet", with an address suffix when split.
+	// "<interface>", "internet", "external-private", ClassCluster or
+	// ClassUnknown, with an address suffix when split.
 	Name           string   `json:"name"`
 	NodeGroup      string   `json:"nodeGroup,omitempty"`
 	Subnet         string   `json:"subnet,omitempty"`
 	SecurityGroups []string `json:"securityGroups,omitempty"`
 	// Addresses are the addresses this class may hold, a subset of the
-	// subnet's (or, for the internet, of the space outside the VPCs).
+	// subnet's (for the internet and external private networks, of their
+	// address space; for ClassCluster, of the pod CIDRs).
 	Addresses []netip.Prefix `json:"addresses"`
 	// PublicAddress says traffic from this class can carry a public address
 	// to an internet gateway: the node's (pods leave the VPC as the node)
@@ -106,13 +127,18 @@ type PlacementClass struct {
 	PublicAddress bool `json:"publicAddress,omitempty"`
 }
 
-// ClassUnknown is the Name of the one class of a workload whose placement
-// cannot be told or matches no node group.
-const ClassUnknown = "unknown"
+const (
+	// ClassUnknown is the Name of the one class of a workload whose
+	// placement cannot be told or matches no node group.
+	ClassUnknown = "unknown"
+	// ClassCluster is the Name of the one class of a workload in an
+	// environment without an AWS layer.
+	ClassCluster = "cluster"
+)
 
 // ClassPair is one combination of a path's source and destination classes.
-// SameNode pairs exist only when both ends may share a node; between them
-// only NetworkPolicy applies.
+// SameNode pairs exist only when both ends may share a node and the
+// environment has an AWS layer; between them only NetworkPolicy applies.
 type ClassPair struct {
 	Source      PlacementClass `json:"source"`
 	Destination PlacementClass `json:"destination"`

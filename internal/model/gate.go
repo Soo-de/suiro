@@ -144,7 +144,9 @@ type Rule struct {
 // (with optional Except, a NetworkPolicy ipBlock), SecurityGroup,
 // PrefixList or Pods. Prefix and Except are compared with the far end's
 // addresses, which for a pod are the addresses of its placement class.
-// IPv6 prefixes are outside the model: adapters drop them.
+// Whether a NetworkPolicy ipBlock matches a pod at all is
+// ClusterProfile.IPBlockAppliesToPods. IPv6 prefixes are outside the model:
+// adapters drop them.
 type Peer struct {
 	// All matches every far end: pods, interfaces and addresses alike. It is
 	// what an unwritten peer list means, which no prefix can say.
