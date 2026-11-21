@@ -1,6 +1,6 @@
 package model
 
-import "maps"
+import "slices"
 
 // ReasonCode names why something was not judged normally. Every warning,
 // Undetermined step and Unknown verdict carries one. Codes travel as strings on every
@@ -11,7 +11,7 @@ type ReasonCode string
 type ReasonLevel string
 
 const (
-	// LevelGate makes one chain step Undetermined. Another step that blocks
+	// LevelGate makes chain steps Undetermined. Another step that blocks
 	// still makes the path Deny (strong Kleene AND), and a passing step is
 	// unaffected.
 	LevelGate ReasonLevel = "gate"
@@ -23,18 +23,68 @@ const (
 	// cannot be trusted: every path with an endpoint in the problem's scope
 	// is Unknown whatever its gates say, and the analysis is partial.
 	//
-	// For an aws source the scope is every path that crosses an AWS gate.
-	// For a git source it is its destination namespace plus every namespace
-	// its objects declared (metadata.namespace) in its latest usable reads,
-	// which inputs supplies in Bundle.DeclaredNamespaces; so it also covers
-	// a ReasonConflictingResource object outside the destination
-	// namespaces. A namespace that the failing content writes into for the
-	// first time cannot be known: paths there keep the verdicts their gates
-	// give, and the analysis is AnalysisPartial with the source's reason.
+	// With ScopeSource the Subject is a SourceID. For an aws source the scope
+	// is every path that crosses an AWS gate. For a git source it is its
+	// destination namespace plus every namespace its objects declared
+	// (metadata.namespace) in its latest usable reads, which inputs supplies
+	// in Bundle.DeclaredNamespaces; so it also covers a
+	// ReasonConflictingResource object outside the destination namespaces. A
+	// namespace that the failing content writes into for the first time
+	// cannot be known: paths there keep the verdicts their gates give, and
+	// the analysis is AnalysisPartial with the source's reason.
 	LevelInput ReasonLevel = "input"
 	// LevelWarning is reported and changes no verdict.
 	LevelWarning ReasonLevel = "warning"
 )
+
+// Producer is a component that raises reason codes.
+type Producer string
+
+const (
+	ProducerRenderer       Producer = "renderer"
+	ProducerGitCollector   Producer = "git-collector"
+	ProducerCloudCollector Producer = "cloud-collector"
+	// ProducerInputs raises into Bundle.Problems, before analysis.
+	ProducerInputs Producer = "inputs"
+	// ProducerAdapter is a core.Adapter, raising into Fragment.Problems
+	// from one snapshot alone.
+	ProducerAdapter Producer = "adapter"
+	// ProducerCore is core.Analyzer, after merging every fragment and the
+	// cluster profile.
+	ProducerCore Producer = "core"
+	// ProducerScope is package scope, when it resolves owners for a reader.
+	ProducerScope Producer = "scope"
+)
+
+// ReasonScope is how far a reason reaches; the code's own comment says
+// exactly which steps or paths.
+type ReasonScope string
+
+const (
+	// ScopeNone reaches nothing: the reason is reported only.
+	ScopeNone ReasonScope = "none"
+	// ScopeStep reaches the chain steps the code's comment names.
+	ScopeStep ReasonScope = "step"
+	// ScopeEndpoint reaches every path of the endpoint the Subject names,
+	// through an Undetermined endpoint step.
+	ScopeEndpoint ReasonScope = "endpoint"
+	// ScopeNamespace reaches every path with an end in the namespace of the
+	// object the Subject names; for a cluster-scoped object, the scope of
+	// its source as ScopeSource.
+	ScopeNamespace ReasonScope = "namespace"
+	// ScopeSource reaches the scope of the source the Subject names, as
+	// LevelInput defines it.
+	ScopeSource ReasonScope = "source"
+)
+
+// ReasonSpec is one code's row of the reason table.
+type ReasonSpec struct {
+	Level ReasonLevel
+	// RaisedBy is every component that may raise the code; no other one
+	// does, which the adapter conformance suite checks for adapters.
+	RaisedBy []Producer
+	Scope    ReasonScope
+}
 
 // Gate-level reasons.
 const (
@@ -50,8 +100,9 @@ const (
 	// Undetermined endpoint step to its paths.
 	ReasonStandalonePod ReasonCode = "standalone-pod"
 	// ReasonPolicyKindUnsupported: a Calico, Cilium or cluster-wide policy
-	// object can override NetworkPolicy; the Kubernetes steps of the pods it
-	// may cover are Undetermined.
+	// object can override NetworkPolicy. For a namespaced object the
+	// Kubernetes steps of every pod in its namespace are Undetermined; for a
+	// cluster-scoped one, every Kubernetes step of the environment.
 	ReasonPolicyKindUnsupported ReasonCode = "policy-kind-unsupported"
 	// ReasonNamespaceUnresolved: a namespaceSelector depends on labels of a
 	// namespace no source declares; matching that peer is Undetermined.
@@ -103,11 +154,18 @@ const (
 	// Security Group rules the model does not see. Paths from the internet
 	// and load balancers to the exposed pods are Undetermined.
 	ReasonAWSControllerEffect ReasonCode = "aws-controller-effect"
+	// ReasonWorkloadKindUnsupported: an object of a kind outside the model
+	// carries a pod template (spec.template.spec.containers, as an Argo
+	// Rollout does), so it creates pods the model does not see. Every path
+	// with an end in its namespace gets an Undetermined endpoint step. A
+	// kind without a pod template raises ReasonKindUnrecognized instead.
+	ReasonWorkloadKindUnsupported ReasonCode = "workload-kind-unsupported"
 )
 
 // Input-level reasons. Their Subject is a SourceID, the source whose scope
-// they cover; a problem that involves several sources is raised once for
-// each.
+// they cover, except for the ScopeNamespace codes, whose Subject is the
+// ObjectKey of the object; a problem that involves several sources is
+// raised once for each.
 const (
 	ReasonRenderFailed  ReasonCode = "render-failed"
 	ReasonRenderTimeout ReasonCode = "render-timeout"
@@ -115,12 +173,21 @@ const (
 	// files sent to it exceeded the message limit.
 	ReasonRenderLimit ReasonCode = "render-limit"
 	// ReasonRemoteResource: the render needs something outside the
-	// repository (a remote chart dependency or base, a plugin, an exec
-	// function), which the renderer refuses.
+	// repository that nothing fetched for it (a chart dependency from a
+	// repository outside the allowed list or not pinned in Chart.lock, a
+	// remote kustomize base, a plugin, an exec function), which the
+	// renderer refuses.
 	ReasonRemoteResource ReasonCode = "remote-resource"
+	// ReasonChartDependencyUnavailable: git-collector could not fetch a
+	// chart dependency that Chart.lock pins from an allowed repository.
+	ReasonChartDependencyUnavailable ReasonCode = "chart-dependency-unavailable"
 	// ReasonSourcePathMissing: the registered path does not exist at the
 	// revision.
 	ReasonSourcePathMissing ReasonCode = "source-path-missing"
+	// ReasonSymlinkUnresolved: a symbolic link under the registered path
+	// does not point to a regular file inside the repository, so a manifest
+	// or template behind it may be missing from the render.
+	ReasonSymlinkUnresolved ReasonCode = "symlink-unresolved"
 	// ReasonAccessDenied: the collector cannot read a source it has never
 	// read. (Losing access later keeps the earlier read, with
 	// ReasonSourceStale.)
@@ -137,6 +204,12 @@ const (
 	// ReasonIPFamilyUnsupported: the cluster or VPC is IPv6; the model is
 	// IPv4.
 	ReasonIPFamilyUnsupported ReasonCode = "ip-family-unsupported"
+	// ReasonObjectInvalid: an object the API server would reject (a CIDR
+	// that does not parse, an except outside its cidr, endPort below port, an
+	// unknown selector operator), so it is never applied and what its
+	// namespace allows after deployment cannot be told. One invalid rule
+	// makes the whole object invalid. Origin.Locator names the field.
+	ReasonObjectInvalid ReasonCode = "object-invalid"
 )
 
 // Warning-level reasons.
@@ -148,7 +221,8 @@ const (
 	// build does not know was ignored and the previous read kept.
 	ReasonContractVersionUnknown ReasonCode = "contract-version-unknown"
 	// ReasonKindUnrecognized: a Kubernetes kind in none of KeptFields,
-	// UnsupportedKinds and IgnoredKinds.
+	// UnsupportedKinds and IgnoredKinds, without a pod template (see
+	// ReasonWorkloadKindUnsupported).
 	ReasonKindUnrecognized ReasonCode = "kind-unrecognized"
 	// ReasonDuplicateResource: two sources produce the same ObjectKey with
 	// equal content.
@@ -173,8 +247,9 @@ const (
 	// ReasonHostPort: a container hostPort exposes the pod on its node's
 	// address, a path the model does not follow.
 	ReasonHostPort ReasonCode = "host-port"
-	// ReasonSymlinkSkipped: git-collector does not pass symbolic links to
-	// the renderer.
+	// ReasonSymlinkSkipped: a symbolic link outside the registered path
+	// that does not point to a regular file inside the repository was not
+	// sent to the renderer; a render that needs it fails on its own.
 	ReasonSymlinkSkipped ReasonCode = "symlink-skipped"
 	// ReasonProfileConflict: an admin-entered cluster profile value differs
 	// from the one read from AWS; the AWS value wins.
@@ -184,54 +259,85 @@ const (
 	// rejected is not checked. The Subject is the file's path for the whole
 	// file and the entry's ObjectKey for one entry.
 	ReasonExpectationsInvalid ReasonCode = "expectations-invalid"
+	// ReasonRuleOutsideModel: a rule was dropped whole because every peer
+	// or every port it had is outside the model (IPv6, SCTP, ICMP).
+	// Dropping it is exact for IPv4 TCP and UDP, which it never matched.
+	// The Subject is the object's ObjectKey and Origin.Locator the rule.
+	ReasonRuleOutsideModel ReasonCode = "rule-outside-model"
 )
 
-// ReasonLevels returns every reason code with its level. Every declared
-// code has an entry; a code missing here is a bug. It returns a copy.
-func ReasonLevels() map[ReasonCode]ReasonLevel { return maps.Clone(reasonLevels) }
+// Reasons returns the reason table: every declared code with its level,
+// producers and scope. Every declared code has a row; a code missing here
+// is a bug. It returns a deep copy.
+func Reasons() map[ReasonCode]ReasonSpec {
+	out := make(map[ReasonCode]ReasonSpec, len(reasons))
+	for c, s := range reasons {
+		s.RaisedBy = slices.Clone(s.RaisedBy)
+		out[c] = s
+	}
+	return out
+}
 
-var reasonLevels = map[ReasonCode]ReasonLevel{
-	ReasonPolicyEnforcementUnknown: LevelGate,
-	ReasonHostNetwork:              LevelGate,
-	ReasonStandalonePod:            LevelGate,
-	ReasonPolicyKindUnsupported:    LevelGate,
-	ReasonNamespaceUnresolved:      LevelGate,
-	ReasonServicePortMismatch:      LevelGate,
-	ReasonRouteOutOfScope:          LevelGate,
-	ReasonRouteMiddlebox:           LevelGate,
-	ReasonPrefixListUnresolved:     LevelGate,
-	ReasonSecurityGroupUnresolved:  LevelGate,
-	ReasonEphemeralPortsPartial:    LevelGate,
-	ReasonPodSecurityGroups:        LevelGate,
-	ReasonCustomNetworking:         LevelGate,
-	ReasonPlacementUnknown:         LevelGate,
-	ReasonNoPlacement:              LevelGate,
-	ReasonAWSReadStale:             LevelGate,
+// ReasonLevels returns every reason code with its level, as Reasons has it.
+func ReasonLevels() map[ReasonCode]ReasonLevel {
+	out := make(map[ReasonCode]ReasonLevel, len(reasons))
+	for c, s := range reasons {
+		out[c] = s.Level
+	}
+	return out
+}
 
-	ReasonAWSControllerEffect: LevelPartial,
+func row(l ReasonLevel, s ReasonScope, by ...Producer) ReasonSpec {
+	return ReasonSpec{Level: l, RaisedBy: by, Scope: s}
+}
 
-	ReasonRenderFailed:            LevelInput,
-	ReasonRenderTimeout:           LevelInput,
-	ReasonRenderLimit:             LevelInput,
-	ReasonRemoteResource:          LevelInput,
-	ReasonSourcePathMissing:       LevelInput,
-	ReasonAccessDenied:            LevelInput,
-	ReasonSourceUnread:            LevelInput,
-	ReasonPullRequestNotMergeable: LevelInput,
-	ReasonConflictingResource:     LevelInput,
-	ReasonIPFamilyUnsupported:     LevelInput,
+var reasons = map[ReasonCode]ReasonSpec{
+	ReasonPolicyEnforcementUnknown: row(LevelGate, ScopeStep, ProducerCore),
+	ReasonHostNetwork:              row(LevelGate, ScopeStep, ProducerAdapter),
+	ReasonStandalonePod:            row(LevelGate, ScopeEndpoint, ProducerAdapter),
+	ReasonPolicyKindUnsupported:    row(LevelGate, ScopeStep, ProducerAdapter),
+	ReasonNamespaceUnresolved:      row(LevelGate, ScopeStep, ProducerCore),
+	ReasonServicePortMismatch:      row(LevelGate, ScopeStep, ProducerCore),
+	ReasonRouteOutOfScope:          row(LevelGate, ScopeStep, ProducerCore),
+	ReasonRouteMiddlebox:           row(LevelGate, ScopeStep, ProducerCore),
+	ReasonPrefixListUnresolved:     row(LevelGate, ScopeStep, ProducerCore),
+	ReasonSecurityGroupUnresolved:  row(LevelGate, ScopeStep, ProducerCore),
+	ReasonEphemeralPortsPartial:    row(LevelGate, ScopeStep, ProducerCore),
+	ReasonPodSecurityGroups:        row(LevelGate, ScopeStep, ProducerAdapter, ProducerCore),
+	ReasonCustomNetworking:         row(LevelGate, ScopeStep, ProducerAdapter, ProducerCore),
+	ReasonPlacementUnknown:         row(LevelGate, ScopeStep, ProducerCore),
+	ReasonNoPlacement:              row(LevelGate, ScopeEndpoint, ProducerCore),
+	ReasonAWSReadStale:             row(LevelGate, ScopeStep, ProducerInputs),
 
-	ReasonSourceStale:            LevelWarning,
-	ReasonContractVersionUnknown: LevelWarning,
-	ReasonKindUnrecognized:       LevelWarning,
-	ReasonDuplicateResource:      LevelWarning,
-	ReasonNamespaceMismatch:      LevelWarning,
-	ReasonRegistrationOverlap:    LevelWarning,
-	ReasonUnowned:                LevelWarning,
-	ReasonOwnershipConflict:      LevelWarning,
-	ReasonNamedPortUnresolved:    LevelWarning,
-	ReasonHostPort:               LevelWarning,
-	ReasonSymlinkSkipped:         LevelWarning,
-	ReasonProfileConflict:        LevelWarning,
-	ReasonExpectationsInvalid:    LevelWarning,
+	ReasonAWSControllerEffect:     row(LevelPartial, ScopeStep, ProducerAdapter),
+	ReasonWorkloadKindUnsupported: row(LevelPartial, ScopeNamespace, ProducerAdapter),
+
+	ReasonRenderFailed:               row(LevelInput, ScopeSource, ProducerRenderer),
+	ReasonRenderTimeout:              row(LevelInput, ScopeSource, ProducerRenderer),
+	ReasonRenderLimit:                row(LevelInput, ScopeSource, ProducerRenderer, ProducerGitCollector),
+	ReasonRemoteResource:             row(LevelInput, ScopeSource, ProducerRenderer),
+	ReasonChartDependencyUnavailable: row(LevelInput, ScopeSource, ProducerGitCollector),
+	ReasonSourcePathMissing:          row(LevelInput, ScopeSource, ProducerGitCollector, ProducerRenderer),
+	ReasonSymlinkUnresolved:          row(LevelInput, ScopeSource, ProducerGitCollector),
+	ReasonAccessDenied:               row(LevelInput, ScopeSource, ProducerGitCollector, ProducerCloudCollector),
+	ReasonSourceUnread:               row(LevelInput, ScopeSource, ProducerInputs),
+	ReasonPullRequestNotMergeable:    row(LevelInput, ScopeSource, ProducerGitCollector),
+	ReasonConflictingResource:        row(LevelInput, ScopeSource, ProducerCore),
+	ReasonIPFamilyUnsupported:        row(LevelInput, ScopeSource, ProducerAdapter),
+	ReasonObjectInvalid:              row(LevelInput, ScopeNamespace, ProducerAdapter),
+
+	ReasonSourceStale:            row(LevelWarning, ScopeNone, ProducerInputs),
+	ReasonContractVersionUnknown: row(LevelWarning, ScopeNone, ProducerInputs),
+	ReasonKindUnrecognized:       row(LevelWarning, ScopeNone, ProducerAdapter),
+	ReasonDuplicateResource:      row(LevelWarning, ScopeNone, ProducerCore),
+	ReasonNamespaceMismatch:      row(LevelWarning, ScopeNone, ProducerRenderer),
+	ReasonRegistrationOverlap:    row(LevelWarning, ScopeNone, ProducerInputs),
+	ReasonUnowned:                row(LevelWarning, ScopeNone, ProducerScope),
+	ReasonOwnershipConflict:      row(LevelWarning, ScopeNone, ProducerScope),
+	ReasonNamedPortUnresolved:    row(LevelWarning, ScopeNone, ProducerCore),
+	ReasonHostPort:               row(LevelWarning, ScopeNone, ProducerAdapter),
+	ReasonSymlinkSkipped:         row(LevelWarning, ScopeNone, ProducerGitCollector),
+	ReasonProfileConflict:        row(LevelWarning, ScopeNone, ProducerCore),
+	ReasonExpectationsInvalid:    row(LevelWarning, ScopeNone, ProducerRenderer, ProducerAdapter),
+	ReasonRuleOutsideModel:       row(LevelWarning, ScopeNone, ProducerAdapter),
 }

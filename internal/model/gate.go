@@ -121,9 +121,13 @@ const (
 )
 
 // Rule is one filter rule. It matches a connection when some peer matches
-// the far end and some port matches the destination port. A rule with no
-// Peers matches every peer; a rule with neither Ports nor NamedPorts matches
-// every port of both protocols.
+// the far end and some port matches the destination port. An empty list
+// never stands for "every": every far end is Peer{All: true} and every port
+// is AllPorts(), which the adapter writes when the source leaves the field
+// unwritten (a NetworkPolicy rule without "from" or without "ports"). A
+// rule with no Peers, or with neither Ports nor NamedPorts, is invalid
+// (Fragment.Validate); one whose every peer or port the adapter dropped as
+// outside the model is dropped whole (ReasonRuleOutsideModel).
 type Rule struct {
 	Action Action `json:"action"`
 	// Order is the evaluation order in an Ordered gate (the Network ACL rule
@@ -136,11 +140,15 @@ type Rule struct {
 	Origin Origin `json:"origin"`
 }
 
-// Peer is the far end a rule matches. Exactly one form is set: Prefix (with
-// optional Except, a NetworkPolicy ipBlock), SecurityGroup, PrefixList or
-// Pods. Prefix and Except are compared with the far end's addresses, which
-// for a pod are the addresses of its placement class.
+// Peer is the far end a rule matches. Exactly one form is set: All, Prefix
+// (with optional Except, a NetworkPolicy ipBlock), SecurityGroup,
+// PrefixList or Pods. Prefix and Except are compared with the far end's
+// addresses, which for a pod are the addresses of its placement class.
+// IPv6 prefixes are outside the model: adapters drop them.
 type Peer struct {
+	// All matches every far end: pods, interfaces and addresses alike. It is
+	// what an unwritten peer list means, which no prefix can say.
+	All    bool           `json:"all,omitempty"`
 	Prefix netip.Prefix   `json:"prefix,omitzero"`
 	Except []netip.Prefix `json:"except,omitempty"`
 	// SecurityGroup matches interfaces carrying the group, by identity, not
@@ -234,4 +242,15 @@ type Fragment struct {
 	// to flag; each object of the snapshot ends in the model, in
 	// IgnoredKinds, or here.
 	Problems []Problem `json:"problems,omitempty"`
+}
+
+// Validate reports the first broken invariant of f, or nil. The invariants
+// are the ones the field comments state: exactly one GateTarget field and
+// one Peer form set; every rule with at least one peer and one port or named
+// port; deny rules and Order only in Ordered filters; Direction set on
+// filters and empty on routes and transforms; From ≤ To in every PortRange;
+// and every enumerated field holding a declared value. A fragment that
+// fails it is an adapter bug, not content.
+func (f Fragment) Validate() error {
+	panic("model: Fragment.Validate is not implemented")
 }

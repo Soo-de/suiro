@@ -46,8 +46,13 @@ type RenderRequest struct {
 	Helm *model.HelmSource
 	// Files is the repository tree at the revision: every regular file, so
 	// that kustomize bases and chart dependencies elsewhere in the
-	// repository resolve. Symbolic links are left out
-	// (model.ReasonSymlinkSkipped), and the .git directory is never sent.
+	// repository resolve. A symbolic link to a regular file inside the
+	// repository is sent as that file's content at the link's path; any
+	// other link is left out, under Path with model.ReasonSymlinkUnresolved
+	// and elsewhere with model.ReasonSymlinkSkipped. For model.RenderHelm,
+	// the chart dependencies git-collector fetched (allowed repositories
+	// only, at the versions Chart.lock pins) are added where helm dependency
+	// build puts them. The .git directory is never sent.
 	Files []File
 }
 

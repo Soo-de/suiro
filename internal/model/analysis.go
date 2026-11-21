@@ -141,6 +141,13 @@ type Analysis struct {
 	Unexamined []Unexamined   `json:"unexamined"`
 }
 
+// Validate reports the first broken invariant of a, or nil: every path has
+// at least one class result, and its Verdict follows from its class
+// outcomes and Reasons as Verdict defines.
+func (a Analysis) Validate() error {
+	panic("model: Analysis.Validate is not implemented")
+}
+
 // Change is one path whose verdict or set of passing class pairs differs
 // between the before and after sides. Opened and Closed compare at class
 // level: a class pair that passes after and did not before is opened (Δ+);
@@ -244,15 +251,18 @@ type RuleSet struct {
 	Hygiene   []HygieneRule `json:"hygiene,omitempty"`
 }
 
-// ExpectationStatus is an expectation's three-valued state. It is computed
-// from class outcomes, never from a path's Verdict, by one rule.
+// ExpectationStatus is an expectation's three-valued state; Unverifiable is
+// the expectation-level name of Undetermined. It is computed from class
+// outcomes, never from a path's Verdict, by one rule.
 //
 // Let S and D be the endpoints the selectors pick. For s ∈ S and d ∈ D,
 // t(s, d) combines the class outcomes of every path from s to d whose port
 // range overlaps Ports. A path that an input-level reason covers adds
 // Undetermined for each of its classes, whatever its gates say, because
 // those gates cannot be trusted (the same reason makes its Verdict
-// Unknown). With Kleene AND for ∀ and Kleene OR for ∃:
+// Unknown). A port of Ports that no path from s to d covers adds
+// Undetermined as well, so a missing path is never read as an answer. With
+// Kleene AND for ∀ and Kleene OR for ∃:
 //
 //	required:  t(s, d) = AND of the outcomes,  T = Q_s s ∈ S  Q_d d ∈ D : t(s, d)
 //	           T Pass → satisfied, T Block → violated, else unverifiable

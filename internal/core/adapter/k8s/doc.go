@@ -8,4 +8,14 @@
 // controller-managed AWS objects are flagged with their reason codes. It
 // also turns the source's expectation entries (model.KindExpectation) into
 // the fragment's required expectations.
+//
+// It applies the defaults the API server writes into an object on create,
+// which no cluster setting changes, from one table kept by Kubernetes
+// version: an omitted NetworkPolicy or Service port protocol is TCP, an
+// omitted policyTypes is Ingress plus Egress when egress rules are present.
+// An unwritten "from", "to" or "ports" becomes model.Peer.All or
+// model.AllPorts. An SCTP port or IPv6 ipBlock is dropped, and a rule left
+// with nothing in that list is dropped whole
+// (model.ReasonRuleOutsideModel). An object the API server would reject
+// raises model.ReasonObjectInvalid.
 package k8s
