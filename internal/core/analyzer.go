@@ -32,9 +32,11 @@ type Analyzer interface {
 	//     got worse.
 	//
 	// Status is AnalysisDone, or AnalysisPartial when an input- or
-	// partial-level reason holds. Analyze returns an error only when it
-	// cannot run at all (a canceled ctx, no adapter for a snapshot kind);
-	// unusable content becomes Unknown verdicts with reasons, never an
+	// partial-level reason holds. The result passes model.Analysis.Validate.
+	// Analyze returns an error only when it cannot run at all (a canceled
+	// ctx, no adapter for a snapshot kind, a fragment that fails
+	// model.Fragment.Validate, which is an adapter bug); unusable content
+	// becomes Undetermined steps and Unknown verdicts with reasons, never an
 	// error and never a clean result.
 	Analyze(ctx context.Context, b model.Bundle) (model.Analysis, error)
 }

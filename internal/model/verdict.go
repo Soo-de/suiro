@@ -3,7 +3,7 @@ package model
 import "net/netip"
 
 // Verdict is the four-valued result of one path. Over a path's class
-// results it is:
+// results, of which there is always at least one, it is:
 //
 //	Unknown             an input-level reason covers the path
 //	Allow               every class pair Pass
@@ -11,9 +11,10 @@ import "net/netip"
 //	PlacementDependent  some class pair Pass and some Block
 //	Unknown             otherwise (some Undetermined, no Pass/Block split)
 //
-// Allow reads "every examined gate allows it in every possible placement",
-// never "the connection works": Analysis.Unexamined lists what was not
-// looked at.
+// Unknown is the path-level name of Undetermined, as Unverifiable is the
+// expectation-level one (see the package comment). Allow reads "every
+// examined gate allows it in every possible placement", never "the
+// connection works": Analysis.Unexamined lists what was not looked at.
 type Verdict string
 
 const (
@@ -24,7 +25,7 @@ const (
 )
 
 // Outcome is the three-valued judgment of one gate step, and of one class
-// pair's whole chain: 1, 0 or ⊥. A chain's outcome
+// pair's whole chain: 1, 0 or ⊥ (Undetermined). A chain's outcome
 // is the strong Kleene AND of its steps: Block if any step blocks, else
 // Undetermined if any step is undetermined, else Pass.
 type Outcome string
@@ -62,6 +63,11 @@ type Endpoint struct {
 	// Classes are the places the endpoint can be: for a workload one per
 	// (node group, subnet, address part) its constraints allow, for an AWS
 	// resource one per interface, for the internet one per address part.
+	// There is always at least one, so no path rests on zero class pairs:
+	// a workload whose constraints match no node group, or whose placement
+	// cannot be told, has the single class ClassUnknown, and core adds an
+	// Undetermined endpoint step to its paths (ReasonNoPlacement,
+	// ReasonPlacementUnknown).
 	Classes []PlacementClass `json:"classes"`
 	Source  SourceID         `json:"source,omitempty"`
 	Object  ObjectKey        `json:"object,omitempty"`
@@ -93,6 +99,10 @@ type PlacementClass struct {
 	PublicAddress bool `json:"publicAddress,omitempty"`
 }
 
+// ClassUnknown is the Name of the one class of a workload whose placement
+// cannot be told or matches no node group.
+const ClassUnknown = "unknown"
+
 // ClassPair is one combination of a path's source and destination classes.
 // SameNode pairs exist only when both ends may share a node; between them
 // only NetworkPolicy applies.
@@ -119,7 +129,8 @@ type Path struct {
 	Key     PathKey `json:"key"`
 	Verdict Verdict `json:"verdict"`
 	// Classes holds one result per class pair, so PlacementDependent can
-	// name where the path is open and where it is closed.
+	// name where the path is open and where it is closed. It is never empty
+	// (see Endpoint.Classes).
 	Classes []ClassResult `json:"classes"`
 	// Reasons are the reason codes behind an Unknown verdict or an
 	// Undetermined step, sorted and without repeats.
@@ -194,4 +205,8 @@ const (
 	// Security Groups, Network ACLs and routes were not examined, and
 	// verdicts rest on the Kubernetes layer alone.
 	UnexaminedAWSLayer Unexamined = "aws-layer"
+	// UnexaminedIPv6 is always listed: the model is IPv4, adapters drop
+	// IPv6 peers, rules and routes, and no result says anything about IPv6
+	// traffic.
+	UnexaminedIPv6 Unexamined = "ipv6"
 )

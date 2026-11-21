@@ -3,26 +3,34 @@ package model
 import "net/netip"
 
 // Protocol is a transport protocol of the connection space. The connection
-// space is TCP and UDP over IPv4. Rules for other protocols (ICMP, SCTP,
-// other IP protocol numbers) match no connection in it; adapters leave them
-// out, which changes no verdict.
+// space is TCP and UDP over IPv4. An element of a rule for another protocol
+// (an ICMP or SCTP port, another IP protocol number) touches no connection
+// in it, so adapters drop that element; a rule left without ports is dropped
+// whole with ReasonRuleOutsideModel, never kept as a rule for every port.
 type Protocol string
 
 const (
 	ProtocolTCP Protocol = "tcp"
 	ProtocolUDP Protocol = "udp"
-	// ProtocolAll appears only in rules ("-1" in AWS, an omitted protocol in
-	// some rule forms) and means both TCP and UDP.
+	// ProtocolAll means every modeled protocol, today TCP and UDP; when a
+	// protocol joins the model, ProtocolAll grows with it. It appears only in
+	// rules whose source says "every protocol" ("-1" in AWS). An omitted
+	// Kubernetes protocol is TCP, the API server's default, never
+	// ProtocolAll.
 	ProtocolAll Protocol = "all"
 )
 
-// PortRange is an inclusive range of destination ports of one protocol.
-// Every port of a protocol is From 0, To 65535.
+// PortRange is an inclusive range of destination ports of one protocol,
+// From ≤ To. Every port of a protocol is From 0, To 65535.
 type PortRange struct {
 	Protocol Protocol `json:"protocol"`
 	From     uint16   `json:"from"`
 	To       uint16   `json:"to"`
 }
+
+// AllPorts is every port of every modeled protocol: the explicit form a rule
+// uses for "all ports", never an empty Ports list.
+func AllPorts() PortRange { return PortRange{Protocol: ProtocolAll, From: 0, To: 65535} }
 
 // NamedPort is a NetworkPolicy or Service port given by name. It is resolved
 // against the destination workload's ContainerPort names; a name no

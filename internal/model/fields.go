@@ -85,7 +85,12 @@ var kubeIdentityFields = []FieldPath{
 // RequesterId) and ARNs, which carry account IDs.
 //
 // The AWS kinds with an entry are also exactly what cloud-collector reads;
-// an AWS kind without one is not read at all.
+// an AWS kind without one is not read at all. A Kubernetes kind without one
+// keeps KubeIdentityFields and, when its body has
+// spec.template.spec.containers, the pod template fields a Deployment keeps,
+// so an adapter can tell a custom kind that creates pods
+// (ReasonWorkloadKindUnsupported) from one that does not
+// (ReasonKindUnrecognized).
 func KeptFields(kind ObjectKind) ([]FieldPath, bool) {
 	f, ok := keptFields[kind]
 	return slices.Clone(f), ok
@@ -274,7 +279,8 @@ var unsupportedKinds = map[ObjectKind]ReasonCode{
 // paths. Adapters skip them without a warning because skipping them is the
 // design, not an accident. Every Kubernetes kind that is in none of
 // KeptFields, UnsupportedKinds and IgnoredKinds raises
-// ReasonKindUnrecognized.
+// ReasonWorkloadKindUnsupported when it carries a pod template and
+// ReasonKindUnrecognized otherwise.
 func IgnoredKinds() []ObjectKind { return slices.Clone(ignoredKinds) }
 
 var ignoredKinds = []ObjectKind{

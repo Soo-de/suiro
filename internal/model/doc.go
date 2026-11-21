@@ -21,9 +21,37 @@
 //     the three-valued gate Outcome under it, before/after changes,
 //     expectations and findings.
 //   - Reasons, files and callers (reason.go, registration.go, caller.go): the
-//     reason codes every warning and Unknown carries, the registration,
-//     ownership and expectations file schemas, and the caller a result is
-//     filtered for.
+//     reason codes every warning and Undetermined step carries, with their
+//     level, producers and scope, the registration, ownership and
+//     expectations file schemas, and the caller a result is filtered for.
+//
+// # Not knowing
+//
+// Each level has one name for "cannot be told", computed from the level
+// below: a chain step or class pair is Undetermined (Outcome), a path is
+// Unknown (Verdict), an expectation is Unverifiable (ExpectationStatus).
+// None of them is ever read as allowed, denied, satisfied or violated.
+//
+// Missing or unreadable input never becomes an allow:
+//   - An element outside the model whose meaning is certain (an SCTP or ICMP
+//     port, an IPv6 peer) is dropped, because it touches only traffic the
+//     model leaves out (UnexaminedIPv6). A rule left with no peers or no
+//     ports is dropped whole and raises ReasonRuleOutsideModel; it never
+//     widens to everything.
+//   - Input whose meaning cannot be known (an invalid object, an unresolved
+//     symbolic link, a custom kind that creates pods, an endpoint with no
+//     placement) makes Undetermined only what it can affect. Reasons holds,
+//     for every code, who raises it, its level and its scope.
+//   - "Every" is never read from an empty list. A field the source leaves
+//     unwritten that means "every" becomes an explicit form (Peer.All,
+//     AllPorts), and Fragment.Validate rejects a rule with no peers or no
+//     ports.
+//   - A default the platform fixes is applied as the platform applies it:
+//     an omitted Kubernetes port protocol is TCP. Behavior that depends on
+//     the installation (whether NetworkPolicies are enforced) is a
+//     ClusterProfile field whose unknown value makes Undetermined the steps
+//     it decides. Changes made to an object on admission (mutating webhooks,
+//     policy engines) cannot be seen from git and are a known limit.
 //
 // JSON field names are the wire and storage names: the HTTP API, documents in
 // the database, and the YAML files, which are read through a YAML-to-JSON
