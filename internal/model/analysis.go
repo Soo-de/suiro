@@ -66,7 +66,10 @@ type Bundle struct {
 	// Problems are what inputs found before analysis, each with a SourceID
 	// as Subject: no complete read yet (ReasonSourceUnread), a read older
 	// than the last attempt (ReasonSourceStale), an ignored snapshot
-	// (ReasonContractVersionUnknown). Sorted by Reason, then Subject.
+	// (ReasonContractVersionUnknown, ReasonDigestMismatch), a reason code
+	// this build does not know (ReasonCodeUnknown), a Before it could not
+	// analyze again (ReasonBeforeOutdated). Sorted by Reason, then
+	// Subject.
 	Problems []Problem `json:"problems,omitempty"`
 	// Profile is the admin-entered cluster profile of Environment, as store
 	// keeps it; values the aws snapshot reveals take precedence.
@@ -75,15 +78,21 @@ type Bundle struct {
 	Rules RuleSet `json:"rules"`
 	// Before is the before side: for a pull request the baseline in force,
 	// for a baseline the previous one; nil on first install, when every path
-	// counts as new. Core re-checks Rules against Before.Paths, so a rule
+	// counts as new. Before made with another SchemaVersion or
+	// AlgorithmVersion is never compared: inputs analyzes that baseline
+	// again first, and when it cannot it raises ReasonBeforeOutdated, on
+	// which core leaves Changes empty and marks New, as with no before side,
+	// every finding that is not satisfied. Core re-checks Rules against Before.Paths, so a rule
 	// added since Before reports what was already violated as existing,
 	// not new. Like every stored analysis it holds path summaries only.
 	Before *Analysis `json:"before,omitempty"`
 	// Fingerprint identifies what the Bundle yields. inputs skips the
 	// analysis when the latest analysis of the same baseline or pull request
 	// has this fingerprint and a finished status (see package inputs). It is
-	// the SHA-256 of the JSON encoding of every other field of the Bundle,
-	// lists in the order stated above, with these reductions:
+	// what ComputeFingerprint returns: the SHA-256 of the RFC 8785 canonical
+	// JSON of every other field of the Bundle, built from the fields as
+	// stated here rather than from the Go struct's encoding, lists in the
+	// order stated above and [] when empty, with these reductions:
 	//   - PullRequest keeps only RepoURL and Number, so a new commit that
 	//     changes no input reuses the stored analysis;
 	//   - each snapshot keeps only its Key and Digest, which covers its
@@ -101,9 +110,21 @@ type Bundle struct {
 	// own Before. Kind, Environment and the pull request's identity are part
 	// of it, so a baseline never shares a fingerprint with a pull request
 	// analysis, nor one pull request with another, however alike their
-	// inputs. A field added to Bundle is added to the fingerprint.
+	// inputs. SchemaVersion and AlgorithmVersion are part of it, so a build
+	// that changes either never reuses an older result. A field added to
+	// Bundle is added to the fingerprint.
 	Fingerprint Digest `json:"fingerprint"`
 	ToolVersion string `json:"toolVersion"`
+	// SchemaVersion and AlgorithmVersion are the build's (see
+	// AlgorithmVersion); the Analysis repeats them.
+	SchemaVersion    int `json:"schemaVersion"`
+	AlgorithmVersion int `json:"algorithmVersion"`
+}
+
+// ComputeFingerprint returns b's fingerprint as Bundle.Fingerprint defines
+// it, ignoring b.Fingerprint itself. It errors where ComputeDigest does.
+func ComputeFingerprint(b Bundle) (Digest, error) {
+	panic("model: ComputeFingerprint is not implemented")
 }
 
 // SnapshotRef records one snapshot an analysis used.
@@ -125,11 +146,15 @@ type Analysis struct {
 	Status      AnalysisStatus `json:"status"`
 	// Fingerprint is the Bundle's, so it also names the kind, environment
 	// and pull request.
-	Fingerprint    Digest        `json:"fingerprint"`
-	ToolVersion    string        `json:"toolVersion"`
-	RuleSetVersion int64         `json:"ruleSetVersion"`
-	CreatedAt      time.Time     `json:"createdAt,omitzero"`
-	Inputs         []SnapshotRef `json:"inputs"`
+	Fingerprint Digest `json:"fingerprint"`
+	ToolVersion string `json:"toolVersion"`
+	// SchemaVersion is the version of this stored JSON and AlgorithmVersion
+	// that of the analysis that made it; 0 in a record older than both.
+	SchemaVersion    int           `json:"schemaVersion"`
+	AlgorithmVersion int           `json:"algorithmVersion"`
+	RuleSetVersion   int64         `json:"ruleSetVersion"`
+	CreatedAt        time.Time     `json:"createdAt,omitzero"`
+	Inputs           []SnapshotRef `json:"inputs"`
 	// Profile is the merged cluster profile the verdicts assumed, with the
 	// source of each value.
 	Profile   ClusterProfile `json:"profile"`

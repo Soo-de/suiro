@@ -16,7 +16,8 @@ const (
 	ProtocolTCP Protocol = "tcp"
 	ProtocolUDP Protocol = "udp"
 	// ProtocolAll means every modeled protocol, today TCP and UDP; when a
-	// protocol joins the model, ProtocolAll grows with it. It appears only in
+	// protocol joins the model, ProtocolAll grows with it and
+	// AlgorithmVersion is raised. It appears only in
 	// rules whose source says "every protocol" ("-1" in AWS). An omitted
 	// Kubernetes protocol is TCP, the API server's default, never
 	// ProtocolAll.

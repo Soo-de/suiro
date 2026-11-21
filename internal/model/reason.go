@@ -226,6 +226,10 @@ const (
 	// namespace allows after deployment cannot be told. One invalid rule
 	// makes the whole object invalid. Origin.Locator names the field.
 	ReasonObjectInvalid ReasonCode = "object-invalid"
+	// ReasonNumberTooLarge: a kept field holds a number beyond ±2^53, which
+	// the canonical JSON of the digest cannot write exactly; the object is
+	// left out of the snapshot.
+	ReasonNumberTooLarge ReasonCode = "number-too-large"
 )
 
 // Warning-level reasons.
@@ -275,6 +279,18 @@ const (
 	// rejected is not checked. The Subject is the file's path for the whole
 	// file and the entry's ObjectKey for one entry.
 	ReasonExpectationsInvalid ReasonCode = "expectations-invalid"
+	// ReasonDigestMismatch: a fetched snapshot's Digest is not
+	// ComputeDigest of its content; it was rejected and the previous read
+	// kept.
+	ReasonDigestMismatch ReasonCode = "digest-mismatch"
+	// ReasonCodeUnknown: a problem carries a reason code this build does not
+	// know, which counts as LevelInput (see LevelOf). Message names the
+	// code.
+	ReasonCodeUnknown ReasonCode = "reason-code-unknown"
+	// ReasonBeforeOutdated: Before was made with another SchemaVersion or
+	// AlgorithmVersion and could not be analyzed again, so the analysis
+	// reports no Changes (see Bundle.Before).
+	ReasonBeforeOutdated ReasonCode = "before-outdated"
 	// ReasonServicePortUnresolved: an expectation names a Service port that
 	// cannot be translated to a target port: the Service does not exist,
 	// has no such port, or names a target port a backend workload does not
@@ -298,6 +314,17 @@ func Reasons() map[ReasonCode]ReasonSpec {
 		out[c] = s
 	}
 	return out
+}
+
+// LevelOf returns code's level. A code this build does not know, from a
+// newer collector, counts as LevelInput over the scope of the source that
+// carried it, and inputs reports ReasonCodeUnknown beside it: an unknown
+// cause is never read as harmless.
+func LevelOf(code ReasonCode) ReasonLevel {
+	if s, ok := reasons[code]; ok {
+		return s.Level
+	}
+	return LevelInput
 }
 
 // ReasonLevels returns every reason code with its level, as Reasons has it.
@@ -350,6 +377,7 @@ var reasons = map[ReasonCode]ReasonSpec{
 	ReasonConflictingResource:        row(LevelInput, ScopeSource, ProducerCore),
 	ReasonIPFamilyUnsupported:        row(LevelInput, ScopeSource, ProducerAdapter),
 	ReasonObjectInvalid:              row(LevelInput, ScopeNamespace, ProducerAdapter),
+	ReasonNumberTooLarge:             row(LevelInput, ScopeNamespace, ProducerRenderer, ProducerCloudCollector),
 
 	ReasonSourceStale:            row(LevelWarning, ScopeNone, ProducerInputs),
 	ReasonContractVersionUnknown: row(LevelWarning, ScopeNone, ProducerInputs),
@@ -366,4 +394,7 @@ var reasons = map[ReasonCode]ReasonSpec{
 	ReasonExpectationsInvalid:    row(LevelWarning, ScopeNone, ProducerRenderer, ProducerAdapter),
 	ReasonRuleOutsideModel:       row(LevelWarning, ScopeNone, ProducerAdapter),
 	ReasonServicePortUnresolved:  row(LevelWarning, ScopeExpectation, ProducerCore),
+	ReasonDigestMismatch:         row(LevelWarning, ScopeNone, ProducerInputs),
+	ReasonCodeUnknown:            row(LevelWarning, ScopeNone, ProducerInputs),
+	ReasonBeforeOutdated:         row(LevelWarning, ScopeNone, ProducerInputs),
 }
