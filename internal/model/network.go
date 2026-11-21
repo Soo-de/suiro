@@ -1,6 +1,9 @@
 package model
 
-import "net/netip"
+import (
+	"net/netip"
+	"slices"
+)
 
 // Protocol is a transport protocol of the connection space. The connection
 // space is TCP and UDP over IPv4. An element of a rule for another protocol
@@ -283,9 +286,77 @@ type ClusterProfile struct {
 	// (ReasonPlacementUnknown) when the environment has an AWS layer, and
 	// does not matter when it has none.
 	NodeGroups []NodeGroup `json:"nodeGroups,omitempty"`
+	// PodCIDRs are the ranges pod addresses come from; nil means unknown
+	// (ReasonPodAddressesUnknown). An admin enters them where the cluster
+	// sets them (a kubeadm pod network CIDR); with the VPC CNI, pods take
+	// VPC addresses, which the aws snapshot reveals.
+	PodCIDRs []netip.Prefix `json:"podCIDRs,omitempty"`
+	// IPBlockAppliesToPods says whether a NetworkPolicy ipBlock matches pod
+	// addresses at all, which Kubernetes leaves to the network plugin;
+	// unknown makes such matches Undetermined
+	// (ReasonIPBlockPodMatchUnknown).
+	IPBlockAppliesToPods Toggle `json:"ipBlockAppliesToPods,omitempty"`
+	// NotInternet are public ranges the organization uses internally. They
+	// leave EndpointInternet and join the external private address space.
+	// Nil adds none.
+	NotInternet []netip.Prefix `json:"notInternet,omitempty"`
+	// PrivateNetworks name parts of the external private address space (an
+	// office VPN, a peered network), each its own endpoint; the rest stays
+	// in EndpointExternalPrivate. Nil names none.
+	PrivateNetworks []PrivateNetwork `json:"privateNetworks,omitempty"`
 	// Sources names, per JSON field name above, where its value came from.
 	// It is set in the merged profile an analysis assumed
 	// (Analysis.Profile); in an admin-entered profile every value is the
 	// admin's.
 	Sources map[string]ProfileSource `json:"sources,omitempty"`
+}
+
+// PrivateNetwork is a named part of the external private address space.
+// Its Prefixes lie in PrivateIPv4 or ClusterProfile.NotInternet; its
+// endpoint's key is "external-private:<Name>", and Name is unique in the
+// profile.
+type PrivateNetwork struct {
+	Name     string         `json:"name"`
+	Prefixes []netip.Prefix `json:"prefixes"`
+}
+
+// SpecialPurposeIPv4 returns, sorted, the IPv4 blocks that are never the
+// internet: the blocks the IANA IPv4 Special-Purpose Address Registry marks
+// not globally reachable, and multicast. ClusterProfile.NotInternet extends
+// it per environment.
+func SpecialPurposeIPv4() []netip.Prefix { return slices.Clone(specialPurposeIPv4) }
+
+var specialPurposeIPv4 = prefixes(
+	"0.0.0.0/8",      // this network
+	"10.0.0.0/8",     // private use
+	"100.64.0.0/10",  // shared address space
+	"127.0.0.0/8",    // loopback
+	"169.254.0.0/16", // link local
+	"172.16.0.0/12",  // private use
+	// IETF protocol assignments, 192.0.0.0/24, without 192.0.0.9/32 and
+	// 192.0.0.10/32, which the registry marks globally reachable.
+	"192.0.0.0/29", "192.0.0.8/32", "192.0.0.11/32", "192.0.0.12/30",
+	"192.0.0.16/28", "192.0.0.32/27", "192.0.0.64/26", "192.0.0.128/25",
+	"192.0.2.0/24",    // documentation
+	"192.168.0.0/16",  // private use
+	"198.18.0.0/15",   // benchmarking
+	"198.51.100.0/24", // documentation
+	"203.0.113.0/24",  // documentation
+	"224.0.0.0/4",     // multicast
+	"240.0.0.0/4",     // reserved, with the limited broadcast address
+)
+
+// PrivateIPv4 returns, sorted, the private address space an external
+// private network can use: the RFC 1918 blocks and the RFC 6598 shared
+// address space.
+func PrivateIPv4() []netip.Prefix { return slices.Clone(privateIPv4) }
+
+var privateIPv4 = prefixes("10.0.0.0/8", "100.64.0.0/10", "172.16.0.0/12", "192.168.0.0/16")
+
+func prefixes(s ...string) []netip.Prefix {
+	out := make([]netip.Prefix, len(s))
+	for i, p := range s {
+		out[i] = netip.MustParsePrefix(p)
+	}
+	return out
 }

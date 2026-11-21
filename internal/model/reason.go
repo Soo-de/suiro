@@ -145,6 +145,15 @@ const (
 	// ReasonAWSReadStale: the last complete AWS read is older than the
 	// configured limit; AWS steps are Undetermined.
 	ReasonAWSReadStale ReasonCode = "aws-read-stale"
+	// ReasonPodAddressesUnknown: ClusterProfile.PodCIDRs is unknown, so a
+	// NetworkPolicy ipBlock cannot be compared with a pod; matching an
+	// ipBlock peer against a pod endpoint is Undetermined, unless
+	// ClusterProfile.IPBlockAppliesToPods is off.
+	ReasonPodAddressesUnknown ReasonCode = "pod-addresses-unknown"
+	// ReasonIPBlockPodMatchUnknown: ClusterProfile.IPBlockAppliesToPods is
+	// unknown; matching an ipBlock peer that overlaps the pod CIDRs against
+	// a pod endpoint is Undetermined.
+	ReasonIPBlockPodMatchUnknown ReasonCode = "ipblock-pod-match-unknown"
 )
 
 // Partial-level reasons.
@@ -308,6 +317,8 @@ var reasons = map[ReasonCode]ReasonSpec{
 	ReasonPlacementUnknown:         row(LevelGate, ScopeStep, ProducerCore),
 	ReasonNoPlacement:              row(LevelGate, ScopeEndpoint, ProducerCore),
 	ReasonAWSReadStale:             row(LevelGate, ScopeStep, ProducerInputs),
+	ReasonPodAddressesUnknown:      row(LevelGate, ScopeStep, ProducerCore),
+	ReasonIPBlockPodMatchUnknown:   row(LevelGate, ScopeStep, ProducerCore),
 
 	ReasonAWSControllerEffect:     row(LevelPartial, ScopeStep, ProducerAdapter),
 	ReasonWorkloadKindUnsupported: row(LevelPartial, ScopeNamespace, ProducerAdapter),

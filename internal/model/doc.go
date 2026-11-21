@@ -48,10 +48,11 @@
 //     ports.
 //   - A default the platform fixes is applied as the platform applies it:
 //     an omitted Kubernetes port protocol is TCP. Behavior that depends on
-//     the installation (whether NetworkPolicies are enforced) is a
-//     ClusterProfile field whose unknown value makes Undetermined the steps
-//     it decides. Changes made to an object on admission (mutating webhooks,
-//     policy engines) cannot be seen from git and are a known limit.
+//     the installation (whether NetworkPolicies are enforced, whether ipBlock
+//     matches pod addresses) is a ClusterProfile field whose unknown value
+//     makes Undetermined the steps it decides. Changes made to an object on
+//     admission (mutating webhooks, policy engines) cannot be seen from git
+//     and are a known limit.
 //
 // JSON field names are the wire and storage names: the HTTP API, documents in
 // the database, and the YAML files, which are read through a YAML-to-JSON
