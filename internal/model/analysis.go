@@ -197,6 +197,12 @@ type EndpointSelector struct {
 	// pod labels match; nil Labels picks every workload in them.
 	Namespaces []string       `json:"namespaces,omitempty"`
 	Labels     *LabelSelector `json:"labels,omitempty"`
+	// Service names a Kubernetes Service, "<namespace>/<name>", or in an
+	// expectations file "<name>" in the registration's namespace. It picks
+	// the workloads the Service selects, and the expectation's Ports are
+	// then the Service's ports (see ExpectationStatus). It is allowed only
+	// in Destinations, and only alone in its selector.
+	Service string `json:"service,omitempty"`
 }
 
 // Expectation is a required or forbidden path set: the paths from Sources
@@ -272,15 +278,24 @@ type RuleSet struct {
 // So a required expectation is satisfied exactly when, under its
 // quantifiers, every path it covers is Allow, which means the network
 // provides the path, not that the service accepts the connection (see
-// Verdict); a forbidden one is violated
-// by any path it covers that is Allow or PlacementDependent, or Unknown
-// with a passing class and no input-level reason. A certain answer
-// survives Undetermined classes elsewhere: one blocking class makes a
-// required t(s, d) Block, one passing class makes a forbidden one Pass. A
-// path that an input-level reason covers can neither satisfy nor violate
-// an expectation; alone, it leaves it unverifiable. When S or D is empty
-// nothing is evaluated: the expectation yields a FindingUnmatched whose
-// Status is Unverifiable, never Satisfied.
+// Verdict); a forbidden one is violated by any path it covers that is Allow
+// or PlacementDependent, or Unknown with a passing class and no input-level
+// reason. A certain answer survives Undetermined classes elsewhere: one
+// blocking class makes a required t(s, d) Block, one passing class makes a
+// forbidden one Pass. A path that an input-level reason covers can neither
+// satisfy nor violate an expectation; alone, it leaves it unverifiable.
+// When S or D is empty nothing is evaluated: the expectation yields a
+// FindingUnmatched whose Status is Unverifiable, never Satisfied.
+//
+// When Destinations names a Service, D is its backend workloads, taken with
+// ∀ whatever DestinationQuantifier says, because the Service may send a
+// connection to any of them. For each backend d, Ports are translated
+// through the Service's port mappings to d's own target ports (a named
+// target port can resolve differently per backend), and t(s, d) is judged
+// on the translated ports. A port the Service lacks, or a target port a
+// backend does not declare, makes the expectation Unverifiable with
+// ReasonServicePortUnresolved; a Service that does not exist picks nothing
+// (FindingUnmatched).
 type ExpectationStatus string
 
 const (

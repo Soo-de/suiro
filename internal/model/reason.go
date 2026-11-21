@@ -75,6 +75,9 @@ const (
 	// ScopeSource reaches the scope of the source the Subject names, as
 	// LevelInput defines it.
 	ScopeSource ReasonScope = "source"
+	// ScopeExpectation reaches the status of the expectation the Subject
+	// names, which becomes Unverifiable; no verdict changes.
+	ScopeExpectation ReasonScope = "expectation"
 )
 
 // ReasonSpec is one code's row of the reason table.
@@ -154,6 +157,10 @@ const (
 	// unknown; matching an ipBlock peer that overlaps the pod CIDRs against
 	// a pod endpoint is Undetermined.
 	ReasonIPBlockPodMatchUnknown ReasonCode = "ipblock-pod-match-unknown"
+	// ReasonSNATUnknown: ClusterProfile.ExternalSNAT is unknown, so whether
+	// pod traffic leaving the VPC takes its node's address cannot be told;
+	// on such paths the steps after the VPC boundary are Undetermined.
+	ReasonSNATUnknown ReasonCode = "snat-unknown"
 )
 
 // Partial-level reasons.
@@ -268,6 +275,12 @@ const (
 	// rejected is not checked. The Subject is the file's path for the whole
 	// file and the entry's ObjectKey for one entry.
 	ReasonExpectationsInvalid ReasonCode = "expectations-invalid"
+	// ReasonServicePortUnresolved: an expectation names a Service port that
+	// cannot be translated to a target port: the Service does not exist,
+	// has no such port, or names a target port a backend workload does not
+	// declare. The expectation is Unverifiable, never satisfied. The Subject
+	// is the expectation's ID.
+	ReasonServicePortUnresolved ReasonCode = "service-port-unresolved"
 	// ReasonRuleOutsideModel: a rule was dropped whole because every peer
 	// or every port it had is outside the model (IPv6, SCTP, ICMP).
 	// Dropping it is exact for IPv4 TCP and UDP, which it never matched.
@@ -319,6 +332,7 @@ var reasons = map[ReasonCode]ReasonSpec{
 	ReasonAWSReadStale:             row(LevelGate, ScopeStep, ProducerInputs),
 	ReasonPodAddressesUnknown:      row(LevelGate, ScopeStep, ProducerCore),
 	ReasonIPBlockPodMatchUnknown:   row(LevelGate, ScopeStep, ProducerCore),
+	ReasonSNATUnknown:              row(LevelGate, ScopeStep, ProducerCore),
 
 	ReasonAWSControllerEffect:     row(LevelPartial, ScopeStep, ProducerAdapter),
 	ReasonWorkloadKindUnsupported: row(LevelPartial, ScopeNamespace, ProducerAdapter),
@@ -351,4 +365,5 @@ var reasons = map[ReasonCode]ReasonSpec{
 	ReasonProfileConflict:        row(LevelWarning, ScopeNone, ProducerCore),
 	ReasonExpectationsInvalid:    row(LevelWarning, ScopeNone, ProducerRenderer, ProducerAdapter),
 	ReasonRuleOutsideModel:       row(LevelWarning, ScopeNone, ProducerAdapter),
+	ReasonServicePortUnresolved:  row(LevelWarning, ScopeExpectation, ProducerCore),
 }

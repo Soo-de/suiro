@@ -49,8 +49,8 @@
 //   - A default the platform fixes is applied as the platform applies it:
 //     an omitted Kubernetes port protocol is TCP. Behavior that depends on
 //     the installation (whether NetworkPolicies are enforced, whether ipBlock
-//     matches pod addresses) is a ClusterProfile field whose unknown value
-//     makes Undetermined the steps it decides. Changes made to an object on
+//     matches pod addresses, VPC CNI SNAT) is a ClusterProfile field whose
+//     unknown value makes Undetermined the steps it decides. Changes made to an object on
 //     admission (mutating webhooks, policy engines) cannot be seen from git
 //     and are a known limit.
 //
