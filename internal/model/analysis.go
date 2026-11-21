@@ -270,7 +270,9 @@ type RuleSet struct {
 //	           T Pass → violated, T Block → satisfied, else unverifiable
 //
 // So a required expectation is satisfied exactly when, under its
-// quantifiers, every path it covers is Allow; a forbidden one is violated
+// quantifiers, every path it covers is Allow, which means the network
+// provides the path, not that the service accepts the connection (see
+// Verdict); a forbidden one is violated
 // by any path it covers that is Allow or PlacementDependent, or Unknown
 // with a passing class and no input-level reason. A certain answer
 // survives Undetermined classes elsewhere: one blocking class makes a
