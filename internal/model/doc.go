@@ -4,7 +4,7 @@
 // core, store and api can all depend on it without depending on each
 // other.
 //
-// The types fall into five groups:
+// The types fall into six groups:
 //
 //   - Sources and reads (source.go, snapshot.go): what a collector reads, the
 //     snapshot it publishes and the objects in it.
@@ -26,6 +26,7 @@
 //     reason codes every warning and Undetermined step carries, with their
 //     level, producers and scope, the registration, ownership and
 //     expectations file schemas, and the caller a result is filtered for.
+//   - Versions (version.go): which change raises which version number.
 //
 // # Not knowing
 //

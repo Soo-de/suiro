@@ -114,7 +114,8 @@ message ReadVersion {
 }
 
 // Snapshot is one complete read (model.Snapshot). A server that does not
-// know contract_version ignores the snapshot and keeps the previous read.
+// know contract_version, or that computes another digest from the content
+// (model.ComputeDigest), ignores the snapshot and keeps the previous read.
 message Snapshot {
   ReadKey key = 1;
   PullRequest pull_request = 2;
