@@ -2,9 +2,14 @@ package core
 
 import (
 	"context"
+	"errors"
 
 	"github.com/Soo-de/suiro/internal/model"
 )
+
+// ErrNoPath is returned by Explain for a key that names no path of the
+// Bundle.
+var ErrNoPath = errors.New("core: no such path")
 
 // Analyzer is the engine's entry point. inputs calls it in the server for
 // every Bundle it does not skip (see package inputs); the CLI calls it in
@@ -20,11 +25,12 @@ type Analyzer interface {
 	//  2. merge the cluster profile (AWS-read values win over admin ones);
 	//  3. resolve selectors, Service targets, Security Group membership and
 	//     each endpoint's placement classes;
-	//  4. for every source/destination pair, every port range that behaves
-	//     alike and every class pair, evaluate each chain step to Pass,
-	//     Block or Undetermined, AND them (strong Kleene) into the class
-	//     outcome, and combine class outcomes into the Verdict, applying
-	//     input-level reasons over everything else;
+	//  4. for every computed pair (see model.Analysis.Paths), every port
+	//     range that behaves alike and every class pair, evaluate each chain
+	//     step to Pass, Block or Undetermined, AND them (strong Kleene) into
+	//     the class outcome, combine class outcomes into the Verdict,
+	//     applying input-level reasons over everything else, and keep only
+	//     the path's summary;
 	//  5. compare with b.Before at class level into Changes;
 	//  6. evaluate b.Rules and the required expectations of the fragments
 	//     (each source's, at the revision its snapshot read) against both
@@ -39,4 +45,12 @@ type Analyzer interface {
 	// becomes Undetermined steps and Unknown verdicts with reasons, never an
 	// error and never a clean result.
 	Analyze(ctx context.Context, b model.Bundle) (model.Analysis, error)
+
+	// Explain recomputes the path keyed k from b with the same steps
+	// Analyze takes, so the detail agrees with the Path that Analyze
+	// returns for k (see model.PathDetail). A k that Analyze would not
+	// return (an endpoint not in b, a pair that is not computed, a port
+	// range that is not exactly one path's) returns ErrNoPath; other errors
+	// are those of Analyze.
+	Explain(ctx context.Context, b model.Bundle, k model.PathKey) (model.PathDetail, error)
 }

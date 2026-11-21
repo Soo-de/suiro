@@ -16,10 +16,12 @@
 //     deny rules of NetworkPolicy, Security Group, Network ACL and route
 //     tables, and the port and address transforms of Services). Adapters in
 //     core translate snapshots into a Fragment of these.
-//   - Results (verdict.go, analysis.go): endpoints, placement classes, paths,
-//     the four-valued Verdict (Allow, Deny, PlacementDependent, Unknown) and
-//     the three-valued gate Outcome under it, before/after changes,
-//     expectations and findings.
+//   - Results (verdict.go, analysis.go): endpoints, placement classes, path
+//     summaries and the detail Explain recomputes, the four-valued Verdict
+//     (Allow, Deny, PlacementDependent, Unknown) and the three-valued gate
+//     Outcome under it, before/after changes, expectations and findings.
+//     The key types have one constructor and parser each (NewObjectKey,
+//     NewGateID, PathKey.String and ParsePathKey).
 //   - Reasons, files and callers (reason.go, registration.go, caller.go): the
 //     reason codes every warning and Undetermined step carries, with their
 //     level, producers and scope, the registration, ownership and
@@ -53,6 +55,19 @@
 //     unknown value makes Undetermined the steps it decides. Changes made to an object on
 //     admission (mutating webhooks, policy engines) cannot be seen from git
 //     and are a known limit.
+//
+// # Canonical order
+//
+// Every list in an Analysis or PathDetail that core returns is sorted, and a
+// list field without omitempty is [] rather than null when empty, so the
+// same Bundle gives byte-equal JSON however the work was scheduled:
+// Endpoints by Key; Paths and Changes by Key in PathKey order (Source,
+// Destination, then the port range's Protocol and From); Findings by Rule,
+// then Subject; Inputs by Key (Source, then PullRequest); Problems by
+// Reason, Subject, Origin.File, then Origin.Locator; Unexamined and every
+// Reasons list by value. A PathDetail's Classes are sorted by source class
+// Name, destination class Name, then SameNode, and each class's Gates are in
+// path order with Members and Owners sorted.
 //
 // JSON field names are the wire and storage names: the HTTP API, documents in
 // the database, and the YAML files, which are read through a YAML-to-JSON

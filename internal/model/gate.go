@@ -10,6 +10,13 @@ import "net/netip"
 // "endpoint:<EndpointKey>" for an endpoint-wide Undetermined step.
 type GateID string
 
+// NewGateID returns the ID of the filter gate made from object for
+// direction d, "<ObjectKey>#<direction>". A route table or Service gate
+// uses its ObjectKey as the GateID.
+func NewGateID(object ObjectKey, d Direction) GateID {
+	panic("model: NewGateID is not implemented")
+}
+
 // Layer is the platform level a gate's rules come from.
 type Layer string
 

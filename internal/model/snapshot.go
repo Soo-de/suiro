@@ -64,6 +64,21 @@ type ObjectKind string
 // bodies are equal, ReasonConflictingResource when they differ).
 type ObjectKey string
 
+// NewObjectKey returns the key of the object of kind named name: in
+// namespace for a namespaced Kubernetes object, and with namespace "" for
+// any other. Keys are built only here.
+func NewObjectKey(kind ObjectKind, namespace, name string) ObjectKey {
+	panic("model: NewObjectKey is not implemented")
+}
+
+// Parse splits k into the parts NewObjectKey takes. The kind runs to the
+// second "/"; for KindExpectation the rest is the name, since an
+// Expectation.ID may contain "/", and for any other kind the rest is a name
+// or a namespace and a name. It errors on any other shape.
+func (k ObjectKey) Parse() (kind ObjectKind, namespace, name string, err error) {
+	panic("model: ObjectKey.Parse is not implemented")
+}
+
 // Object is one source object reduced to its kept fields.
 type Object struct {
 	Kind   ObjectKind `json:"kind"`
