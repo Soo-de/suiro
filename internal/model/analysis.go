@@ -192,27 +192,36 @@ type Analysis struct {
 
 // Limits are the counter limits an analyzer runs with, so that no input,
 // however large, makes one analysis take the server. Reaching one never
-// fails the analysis: the budget goes to pairs in canonical order, and the
-// paths it does not reach are Unknown with ReasonAnalysisLimit, so the same
-// input always loses the same paths, however the work was scheduled. Every
-// limit must be positive; the values come from measurement on a reference
-// machine. Time is not one of them: the time budget is ctx's deadline, and
-// running out fails the analysis, because where time runs out depends on
-// the machine.
+// fails the analysis; it cuts off the pairs its field names, the same ones
+// however the work was scheduled. Every endpoint stays listed, and a pair
+// cut off gets, in place of its paths, one Unknown path per protocol over
+// every port (tcp and udp, 0-65535) with ReasonAnalysisLimit, whose class
+// pairs are all Undetermined, SameNode ones included wherever both ends
+// are workloads, so no placement is left out. Every limit must be
+// positive; the values come from measurement on a reference machine. Time
+// is not one of them: the time budget is ctx's deadline, and running out
+// fails the analysis, because where time runs out depends on the machine.
 type Limits struct {
-	// Endpoints is the most endpoints of one analysis.
+	// Endpoints is the most endpoints of one analysis. Past it, every pair
+	// with an endpoint beyond the first Endpoints in Key order is cut off,
+	// and those endpoints keep their classes before prefix cuts.
 	Endpoints int `json:"endpoints"`
-	// Rules is the most filter rules over every gate of one analysis.
+	// Rules is the most filter rules over every gate of one analysis. Past
+	// it every pair is cut off, since any gate may decide any pair.
 	Rules int `json:"rules"`
 	// PrefixesPerEndpoint is the most rule prefixes that may split one
-	// endpoint's placement classes.
+	// endpoint's placement classes. An endpoint past it keeps its classes
+	// before prefix cuts, and every pair with it is cut off.
 	PrefixesPerEndpoint int `json:"prefixesPerEndpoint"`
 	// PortRangesPerPair is the most port ranges the paths of one pair may
-	// cut the port space into.
+	// cut the port space into; a pair past it is cut off.
 	PortRangesPerPair int `json:"portRangesPerPair"`
 	// Evaluations is the most chain evaluations of one analysis, each pair
 	// × port range × class pair counted once, and once more for each backend
-	// of a Service an expectation names.
+	// of a Service an expectation names. The budget goes to pairs in
+	// canonical order, then to expectations in ID order: the pair or
+	// expectation it runs out on and every later one are cut off, and an
+	// expectation cut off is Unverifiable with ReasonAnalysisLimit.
 	Evaluations int `json:"evaluations"`
 }
 

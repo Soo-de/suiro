@@ -22,8 +22,11 @@ type Renderer interface {
 	// does not validate adds a model.ReasonExpectationsInvalid warning
 	// instead and never fails the job. A problem with the content itself (a
 	// template error, a timeout, a limit, a refused remote resource, a bad
-	// path) ends the job with one input-level Problem and no objects,
-	// expectation entries included: half a render is never returned.
+	// path, a kept number beyond ±2^53) ends the job with one input-level
+	// Problem and no objects, expectation entries included: half a render
+	// is never returned. Its limits include a result over the snapshot
+	// object limit or the message size limit both ends share
+	// (model.ReasonRenderLimit).
 	// The error is only for failures of the call itself, such as an
 	// unreachable renderer or a canceled ctx.
 	Render(ctx context.Context, req RenderRequest) (RenderResult, error)

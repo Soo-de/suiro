@@ -96,8 +96,8 @@ type Object struct {
 	// Kind plus, for Kubernetes, KubeIdentityFields. Anything else, Secret
 	// data and environment variables included, is removed before the object
 	// leaves the renderer or the cloud-collector. It never holds a number
-	// beyond ±2^53, which RFC 8785 cannot write exactly: such an object is
-	// left out with ReasonNumberTooLarge.
+	// beyond ±2^53, which RFC 8785 cannot write exactly: a read with one is
+	// published without objects (ReasonNumberTooLarge).
 	Body json.RawMessage `json:"body"`
 }
 

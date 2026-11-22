@@ -208,8 +208,10 @@ const (
 const (
 	ReasonRenderFailed  ReasonCode = "render-failed"
 	ReasonRenderTimeout ReasonCode = "render-timeout"
-	// ReasonRenderLimit: the render hit its memory or size limit, or the
-	// files sent to it exceeded the message limit.
+	// ReasonRenderLimit: the render hit its memory limit, its result would
+	// hold more objects than the snapshot object limit or not fit the
+	// message size limit both ends share, the files sent to it exceeded
+	// that message limit, or it would read a file sent truncated.
 	ReasonRenderLimit ReasonCode = "render-limit"
 	// ReasonRemoteResource: the render needs something outside the
 	// repository that nothing fetched for it (a chart dependency from a
@@ -250,13 +252,21 @@ const (
 	// makes the whole object invalid. Origin.Locator names the field.
 	ReasonObjectInvalid ReasonCode = "object-invalid"
 	// ReasonNumberTooLarge: a kept field holds a number beyond ±2^53, which
-	// the canonical JSON of the digest cannot write exactly; the object is
-	// left out of the snapshot.
+	// the canonical JSON of the digest cannot write exactly. Like any other
+	// content problem it makes the read unusable as a whole: the snapshot
+	// holds no objects, only this problem with the object in Origin, so no
+	// read is ever published with an object missing.
 	ReasonNumberTooLarge ReasonCode = "number-too-large"
-	// ReasonAnalysisLimit: one of the Limits was reached. The paths core
-	// could not compute within it, the last in canonical order, are Unknown.
-	// The Subject is the limit's JSON name and the Message the value the
-	// input needed.
+	// ReasonSnapshotLimit: a read holds more objects than the snapshot
+	// object limit, or its snapshot would not fit the message size limit
+	// GetSnapshot shares with the server. The collector publishes it with no
+	// objects and this problem, never cut short.
+	ReasonSnapshotLimit ReasonCode = "snapshot-limit"
+	// ReasonAnalysisLimit: one of the Limits was reached, and what its field
+	// names is cut off. The Subject is the limit's JSON name; the Message
+	// gives the limit and the value the input needed, written "at least N"
+	// where that value cannot be known without finishing the work, as for
+	// Evaluations.
 	ReasonAnalysisLimit ReasonCode = "analysis-limit"
 	// ReasonAnalysisTimeout: the analysis did not finish within its time
 	// budget. It is stored as AnalysisFailed, with no endpoints or paths,
@@ -423,7 +433,8 @@ var reasons = map[ReasonCode]ReasonSpec{
 	ReasonConflictingResource:        row(LevelInput, ScopeSource, ProducerCore),
 	ReasonIPFamilyUnsupported:        row(LevelInput, ScopeSource, ProducerAdapter),
 	ReasonObjectInvalid:              row(LevelInput, ScopeNamespace, ProducerAdapter),
-	ReasonNumberTooLarge:             row(LevelInput, ScopeNamespace, ProducerRenderer, ProducerCloudCollector),
+	ReasonNumberTooLarge:             row(LevelInput, ScopeSource, ProducerRenderer, ProducerCloudCollector),
+	ReasonSnapshotLimit:              row(LevelInput, ScopeSource, ProducerGitCollector, ProducerCloudCollector),
 	ReasonAnalysisLimit:              row(LevelInput, ScopePaths, ProducerCore),
 	ReasonAnalysisTimeout:            row(LevelInput, ScopeAnalysis, ProducerInputs),
 

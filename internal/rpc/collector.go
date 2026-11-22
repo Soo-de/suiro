@@ -44,7 +44,10 @@ type Collector interface {
 	// GetSnapshot returns the latest complete snapshot of key, which may be
 	// newer than the last status announced. A key with no complete read
 	// returns ErrNoCompleteRead; a key whose source is outside the watch
-	// list returns ErrUnknownSource.
+	// list returns ErrUnknownSource. A snapshot always fits the message size
+	// limit both ends share and the snapshot object limit: a read over
+	// either is published with no objects and model.ReasonSnapshotLimit (or
+	// the renderer's model.ReasonRenderLimit), never cut short.
 	GetSnapshot(ctx context.Context, key model.ReadKey) (model.Snapshot, error)
 
 	// Refresh asks for a read of source now and returns once the request is
