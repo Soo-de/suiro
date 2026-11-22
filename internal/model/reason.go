@@ -333,7 +333,8 @@ const (
 	// sent to the renderer; a render that needs it fails on its own.
 	ReasonSymlinkSkipped ReasonCode = "symlink-skipped"
 	// ReasonProfileConflict: an admin-entered cluster profile value differs
-	// from the one read from AWS; the AWS value wins.
+	// from the one read from AWS; the AWS value wins. The Subject is the
+	// profile field's JSON name.
 	ReasonProfileConflict ReasonCode = "profile-conflict"
 	// ReasonExpectationsInvalid: an application's expectations file, or one
 	// entry in it, does not validate (see ExpectationsFile); what was

@@ -32,8 +32,6 @@ type ScopeFilter interface {
 	// FilterDetail fills the Owners of every step of d, a path of a, and
 	// returns the part the caller may see, or false when Filter would not
 	// show the caller that path. Each step is redacted member by member as
-	// model.GateRef.Redacted defines: members of other owners or of nobody
-	// lose their rules and Service ports, and Kubernetes ones their IDs too;
-	// outcomes and the verdict stay.
+	// model.GateRef.Redacted defines; the verdict stays.
 	FilterDetail(c model.Caller, a model.Analysis, d model.PathDetail) (model.PathDetail, bool)
 }
