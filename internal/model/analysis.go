@@ -178,6 +178,8 @@ type Analysis struct {
 	// between AWS resources, from an AWS resource to a network (the
 	// internet, an external private or a link-local one), between networks,
 	// from a link-local network, or from an endpoint to itself.
+	// Expectations leave those pairs out (see ExpectationStatus), and
+	// Unexamined lists them (UnexaminedPairs).
 	Paths      []Path       `json:"paths"`
 	Changes    []Change     `json:"changes,omitempty"`
 	Findings   []Finding    `json:"findings,omitempty"`
@@ -291,13 +293,19 @@ const (
 	QuantifyAny Quantifier = "any"
 )
 
-// EndpointSelector picks endpoints: the union of every listed form. Every
-// form must pick something: a form that picks nothing, such as an Endpoints
-// key the analysis does not have or a workload renamed since, makes the
-// expectation a FindingUnmatched, never a silently narrower or satisfied
-// one. An expectations file names endpoints the way their own platform
-// does (see ExpectationsFile); All, ResourceKinds and Endpoints, which
-// reach everything or use internal keys, are for forbidden rules.
+// EndpointSelector picks endpoints: the union of every listed form. Each
+// Endpoints key, each ResourceKinds entry and each namespace of Namespaces
+// (with Labels) is a form of its own, and so is every other field that
+// picks (WorkloadKind belongs to Workload). A form must pick something: one
+// that picks nothing, such as an Endpoints key the analysis does not have
+// or a workload renamed since, is never read as a narrower or satisfied
+// selector. It makes a required expectation a FindingUnmatched as a whole.
+// In a forbidden rule it yields a FindingUnmatched of its own while the
+// forms that pick something are still checked, so a stale form never hides
+// a violation the others find. An expectations file names endpoints the
+// way their own platform does (see ExpectationsFile); All, ResourceKinds
+// and Endpoints, which reach everything or use internal keys, are for
+// forbidden rules.
 type EndpointSelector struct {
 	// All picks every endpoint.
 	All bool `json:"all,omitempty"`
@@ -312,8 +320,9 @@ type EndpointSelector struct {
 	Self bool `json:"self,omitempty"`
 	// Workload picks the workload of that name among the expectation's own
 	// source's workloads in the registration's namespace. WorkloadKind
-	// ("Deployment", "StatefulSet", ...) is needed only when two of them
-	// share the name.
+	// ("Deployment", "StatefulSet", ...) tells apart two of them that share
+	// the name; without it such a name is ambiguous and picks neither, so
+	// the form picks nothing rather than a guess.
 	Workload     string `json:"workload,omitempty"`
 	WorkloadKind string `json:"workloadKind,omitempty"`
 	// Application picks every workload of a registered application,
@@ -327,9 +336,10 @@ type EndpointSelector struct {
 	Labels     *LabelSelector `json:"labels,omitempty"`
 	// Service names a Kubernetes Service, "<namespace>/<name>", or in an
 	// expectations file "<name>" in the registration's namespace. It picks
-	// the workloads the Service selects, and the expectation's Ports are
-	// then the Service's ports (see ExpectationStatus). It is allowed only
-	// in Destinations, and only alone in its selector.
+	// the workloads the Service selects, nothing when the Service does not
+	// exist or selects none, and the expectation's Ports are then the
+	// Service's ports (see ExpectationStatus). It is allowed only in
+	// Destinations, and only alone in its selector.
 	Service string `json:"service,omitempty"`
 	// RDS picks the database endpoint of the RDS DB instance
 	// (KindDBInstance) whose DBInstanceIdentifier is this.
@@ -422,14 +432,14 @@ type RuleSet struct {
 // the expectation-level name of Undetermined. It is computed from class
 // outcomes, never from a path's Verdict, by one rule.
 //
-// Let S and D be the endpoints the selectors pick. For s ∈ S and d ∈ D,
-// t(s, d) combines the class outcomes of every path from s to d whose port
-// range overlaps Ports. A path that an input-level reason covers adds
-// Undetermined for each of its classes, whatever its gates say, because
-// those gates cannot be trusted (the same reason makes its Verdict
-// Unknown). A port of Ports that no path from s to d covers adds
-// Undetermined as well, so a missing path is never read as an answer. With
-// Kleene AND for ∀ and Kleene OR for ∃:
+// Let S and D be the endpoints the selectors pick, through the forms that
+// pick something (see EndpointSelector). For s ∈ S and d ∈ D, t(s, d)
+// combines the class outcomes of every path from s to d whose port range
+// overlaps Ports; a path that an input-level reason covers has only
+// Undetermined ones, because its gates cannot be trusted (see Path). A port
+// of Ports that no path from s to d covers adds Undetermined as well, so a
+// missing path is never read as an answer. With Kleene AND for ∀ and
+// Kleene OR for ∃:
 //
 //	required:  t(s, d) = AND of the outcomes,  T = Q_s s ∈ S  Q_d d ∈ D : t(s, d)
 //	           T Pass → satisfied, T Block → violated, else unverifiable
@@ -445,20 +455,25 @@ type RuleSet struct {
 // blocking class makes a required t(s, d) Block, one passing class makes a
 // forbidden one Pass. A path that an input-level reason covers can neither
 // satisfy nor violate an expectation; alone, it leaves it unverifiable.
-// When S or D is empty nothing is evaluated: the expectation yields a
-// FindingUnmatched whose Status is Unverifiable, never Satisfied. Pairs with
-// s = d are left out, as no path is computed for them; when no pair is
-// left, the expectation is Unverifiable.
 //
-// When Destinations names a Service, D is its backend workloads, taken with
-// ∀ whatever DestinationQuantifier says, because the Service may send a
-// connection to any of them. For each backend d, Ports are translated
-// through the Service's port mappings to d's own target ports (a named
-// target port can resolve differently per backend), and t(s, d) is judged
-// on the translated ports. A port the Service lacks, or a target port a
-// backend does not declare, makes the expectation Unverifiable with
-// ReasonServicePortUnresolved; a Service that does not exist picks nothing
-// (FindingUnmatched).
+// Pairs that Analysis.Paths does not compute, s = d among them, are left
+// out rather than read as missing paths, so a forbidden rule over every
+// endpoint can be satisfied by the pairs that are computed; Unexamined
+// lists the rest (UnexaminedPairs). When S or D is empty, or no pair is
+// left, nothing is evaluated: the expectation yields a FindingUnmatched
+// whose Status is Unverifiable, never Satisfied.
+//
+// When Destinations names a Service, D is its backend workloads. A required
+// expectation takes them with ∀ whatever DestinationQuantifier says,
+// because the Service may send a connection to any of them; a forbidden
+// rule is violated when any backend is reached, as its OR over D already
+// says. For each backend d, Ports are translated through the Service's port
+// mappings to d's own target ports (a named target port can resolve
+// differently per backend), and t(s, d) is judged on the translated ports.
+// A port the Service lacks, or a named target port a backend does not
+// declare, makes the expectation Unverifiable with
+// ReasonServicePortUnresolved; a numeric target port needs no declaration,
+// as in Kubernetes.
 type ExpectationStatus string
 
 const (
@@ -476,7 +491,9 @@ const (
 	// FindingHygiene is a finding of any HygieneCheck, shadowed Network ACL
 	// rules included; its Rule names the HygieneRule.
 	FindingHygiene FindingKind = "hygiene"
-	// FindingUnmatched is an expectation whose selectors pick nothing.
+	// FindingUnmatched is an expectation left with nothing to evaluate, or
+	// one form of a forbidden rule that picks nothing (see
+	// EndpointSelector).
 	FindingUnmatched FindingKind = "unmatched"
 )
 
@@ -487,9 +504,10 @@ const (
 // A forbidden expectation yields one finding per path it covers that is not
 // satisfied, so a pull request that opens a new forbidden path warns even
 // when the same rule is already violated elsewhere, and an exception for one
-// path matches that path's finding alone. A required expectation, and an
-// expectation whose selectors pick nothing, yields one finding for the
-// whole expectation.
+// path matches that path's finding alone; it also yields one
+// FindingUnmatched for each form that picks nothing. A required
+// expectation, and an expectation left with nothing to evaluate, yields one
+// finding for the whole expectation.
 type Finding struct {
 	Kind FindingKind `json:"kind"`
 	// Rule is the expectation or hygiene rule ID.
@@ -518,8 +536,10 @@ type Finding struct {
 	Mode    RuleMode     `json:"mode,omitempty"`
 	Paths   []PathKey    `json:"paths,omitempty"`
 	Reasons []ReasonCode `json:"reasons,omitempty"`
-	// Origin is where the expectation is declared or, for a hygiene
-	// finding, the object or rule it is about.
+	// Origin is where the expectation is declared, with Locator naming the
+	// form for an unmatched form ("destinations.workload",
+	// "sources.endpoints[1]"), or, for a hygiene finding, the object or rule
+	// it is about.
 	Origin Origin `json:"origin"`
 	// Owner is the expectation's owner, or for a hygiene finding the
 	// object's: the one to contact when another team's change breaks it;
