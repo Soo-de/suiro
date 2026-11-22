@@ -319,7 +319,7 @@ type RuleRef struct {
 	Origin Origin `json:"origin"`
 }
 
-// Unexamined names a gate no analysis looks at, listed with every result so
+// Unexamined names what no analysis looks at, listed with every result so
 // that "allowed" is never read as "works".
 type Unexamined string
 
@@ -335,4 +335,7 @@ const (
 	// IPv6 peers, rules and routes, and no result says anything about IPv6
 	// traffic.
 	UnexaminedIPv6 Unexamined = "ipv6"
+	// UnexaminedPairs is always listed: the pairs Analysis.Paths does not
+	// compute have no path, and no expectation is checked over them.
+	UnexaminedPairs Unexamined = "uncomputed-pairs"
 )

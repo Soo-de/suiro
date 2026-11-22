@@ -326,11 +326,12 @@ const (
 	// it is compared with, and could not be analyzed again, so the analysis
 	// reports no Changes (see Bundle.Before).
 	ReasonBeforeOutdated ReasonCode = "before-outdated"
-	// ReasonServicePortUnresolved: an expectation names a Service port that
-	// cannot be translated to a target port: the Service does not exist,
-	// has no such port, or names a target port a backend workload does not
+	// ReasonServicePortUnresolved: an expectation names a port of an
+	// existing Service that cannot be translated: the Service has no such
+	// port, or its target port is a name that a backend workload does not
 	// declare. The expectation is Unverifiable, never satisfied. The Subject
-	// is the expectation's ID.
+	// is the expectation's ID. A Service that does not exist is not this
+	// reason: its form picks nothing (see EndpointSelector).
 	ReasonServicePortUnresolved ReasonCode = "service-port-unresolved"
 	// ReasonRuleOutsideModel: a rule was dropped whole because every peer
 	// or every port it had is outside the model (IPv6, SCTP, ICMP).
