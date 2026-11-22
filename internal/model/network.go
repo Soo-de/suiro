@@ -136,7 +136,9 @@ type PodAffinityTerm struct {
 //  1. a Namespace object a git source declares, at the revision the
 //     analysis reads that source, so a pull request's change counts; it
 //     wins over the cluster, which shows the state before deployment;
-//  2. the live read of the cluster (a SourceCluster snapshot);
+//  2. the latest read of the cluster (a SourceCluster snapshot), unless it
+//     is stale (ReasonClusterReadStale) or an input-level problem of the
+//     cluster source makes it unusable;
 //  3. ClusterProfile.NamespaceLabels, entered by an admin.
 //
 // Two git sources that declare one namespace with different labels make its
@@ -336,8 +338,8 @@ type ClusterProfile struct {
 	LinkLocalNetworks []NamedNetwork `json:"linkLocalNetworks,omitempty"`
 	// NamespaceLabels are labels an admin enters by namespace name, the last
 	// of the sources Namespace lists: used only for a namespace that no git
-	// source declares and the cluster read does not hold, as when the
-	// cluster cannot be read. Nil adds none.
+	// source declares and no usable cluster read holds, as when the cluster
+	// cannot be read or its read is stale. Nil adds none.
 	NamespaceLabels map[string]map[string]string `json:"namespaceLabels,omitempty"`
 	// KeptTagKeys are the AWS tag keys whose tags cloud-collector keeps on
 	// the RDS and EC2 instances it reads, so EndpointSelector.Tags can match

@@ -20,18 +20,25 @@ const (
 	// network.
 	LevelPartial ReasonLevel = "partial"
 	// LevelInput means the inputs behind a path are incomplete, so its gates
-	// cannot be trusted: every path with an endpoint in the problem's scope
-	// is Unknown whatever its gates say, and the analysis is partial.
+	// cannot be trusted: every path in the problem's scope is Unknown
+	// whatever its gates say, and the analysis is partial.
 	//
-	// With ScopeSource the Subject is a SourceID. For an aws source the scope
-	// is every path that crosses an AWS gate. For a git source it is its
-	// destination namespace plus every namespace its objects used
-	// (metadata.namespace) in its latest usable reads, which inputs supplies
-	// in Bundle.UsedNamespaces; so it also covers a
-	// ReasonConflictingResource object outside the destination namespaces. A
-	// namespace that the failing content writes into for the first time
-	// cannot be known: paths there keep the verdicts their gates give, and
-	// the analysis is AnalysisPartial with the source's reason.
+	// With ScopeSource the Subject is a SourceID, and the scope follows the
+	// source's kind:
+	//   - aws: every path that crosses an AWS gate.
+	//   - git: every path with an end in its destination namespace or in a
+	//     namespace its objects used (metadata.namespace) in its latest
+	//     usable reads, which inputs supplies in Bundle.UsedNamespaces; so it
+	//     also covers a ReasonConflictingResource object outside the
+	//     destination namespaces. A namespace that the failing content writes
+	//     into for the first time cannot be known: paths there keep the
+	//     verdicts their gates give, and the analysis is AnalysisPartial with
+	//     the source's reason.
+	//   - cluster: only the namespaceSelector matches that would use the
+	//     labels of its read, since the read holds nothing else. The read is
+	//     not used, and those matches fall back as Namespace lists: to
+	//     ClusterProfile.NamespaceLabels, else Undetermined
+	//     (ReasonNamespaceLabelsUnknown). No path becomes Unknown through it.
 	LevelInput ReasonLevel = "input"
 	// LevelWarning is reported and changes no verdict.
 	LevelWarning ReasonLevel = "warning"
@@ -112,19 +119,15 @@ const (
 	// cluster-scoped one, every Kubernetes step of the environment.
 	ReasonPolicyKindUnsupported ReasonCode = "policy-kind-unsupported"
 	// ReasonNamespaceLabelsUnknown: a namespaceSelector depends on labels of
-	// a namespace that no git source declares, the cluster read does not
-	// hold and the profile does not list (see Namespace); matching that
-	// peer is Undetermined.
+	// a namespace that no git source declares, no usable cluster read holds
+	// and the profile does not list (see Namespace); matching that peer is
+	// Undetermined.
 	ReasonNamespaceLabelsUnknown ReasonCode = "namespace-labels-unknown"
 	// ReasonNamespaceLabelsConflict: two git sources declare one namespace
 	// with different labels, so which apply after deployment cannot be
 	// told; matching a namespaceSelector against it is Undetermined. The
 	// Subject is the namespace.
 	ReasonNamespaceLabelsConflict ReasonCode = "namespace-labels-conflict"
-	// ReasonClusterReadStale: the last complete cluster read is older than
-	// the configured limit; matching a namespaceSelector against labels
-	// from that read is Undetermined.
-	ReasonClusterReadStale ReasonCode = "cluster-read-stale"
 	// ReasonServicePortMismatch: with the VPC CNI, a Service whose port
 	// differs from the container port makes NetworkPolicy enforcement on it
 	// unreliable.
@@ -267,6 +270,11 @@ const (
 	// ReasonSourceStale: the latest read attempt failed; the analysis uses
 	// the read that finished at the source's LastCompleteRead.
 	ReasonSourceStale ReasonCode = "source-stale"
+	// ReasonClusterReadStale: the last complete cluster read is older than
+	// the configured limit, so its labels are not used: a namespace no git
+	// source declares takes ClusterProfile.NamespaceLabels, or its labels
+	// are unknown (ReasonNamespaceLabelsUnknown).
+	ReasonClusterReadStale ReasonCode = "cluster-read-stale"
 	// ReasonContractVersionUnknown: a snapshot of a contract version this
 	// build does not know was ignored and the previous read kept.
 	ReasonContractVersionUnknown ReasonCode = "contract-version-unknown"
@@ -383,7 +391,6 @@ var reasons = map[ReasonCode]ReasonSpec{
 	ReasonPolicyKindUnsupported:    row(LevelGate, ScopeStep, ProducerAdapter),
 	ReasonNamespaceLabelsUnknown:   row(LevelGate, ScopeStep, ProducerCore),
 	ReasonNamespaceLabelsConflict:  row(LevelGate, ScopeStep, ProducerCore),
-	ReasonClusterReadStale:         row(LevelGate, ScopeStep, ProducerInputs),
 	ReasonServicePortMismatch:      row(LevelGate, ScopeStep, ProducerCore),
 	ReasonRouteOutOfScope:          row(LevelGate, ScopeStep, ProducerCore),
 	ReasonRouteMiddlebox:           row(LevelGate, ScopeStep, ProducerCore),
@@ -421,6 +428,7 @@ var reasons = map[ReasonCode]ReasonSpec{
 	ReasonAnalysisTimeout:            row(LevelInput, ScopeAnalysis, ProducerInputs),
 
 	ReasonSourceStale:                  row(LevelWarning, ScopeNone, ProducerInputs),
+	ReasonClusterReadStale:             row(LevelWarning, ScopeNone, ProducerInputs),
 	ReasonContractVersionUnknown:       row(LevelWarning, ScopeNone, ProducerInputs),
 	ReasonKindUnrecognized:             row(LevelWarning, ScopeNone, ProducerAdapter),
 	ReasonDuplicateResource:            row(LevelWarning, ScopeNone, ProducerCore),
