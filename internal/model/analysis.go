@@ -412,9 +412,13 @@ const (
 	// ModeWarn findings warn when New.
 	ModeWarn RuleMode = "warn"
 	// ModeBlock findings stop the pull request when New: violated, or
-	// unverifiable for any reason, a reached limit included. So a critical
-	// rule never passes unchecked, and a pull request cannot get past it by
-	// growing the input beyond what the analysis computes.
+	// unverifiable for any reason, a reached limit included. A pull request
+	// cannot get past the rule by making a checked path unchecked, through
+	// its content or by growing the input beyond what the analysis
+	// computes: a class pair Before shows closed that turns Undetermined is
+	// possibly opened, which is New (see Finding.New). What Before already
+	// left unchecked and the pull request leaves so is not New: it is
+	// listed with the existing findings and does not stop the pull request.
 	ModeBlock RuleMode = "block"
 )
 
