@@ -329,13 +329,21 @@ type EndpointSelector struct {
 	// then the Service's ports (see ExpectationStatus). It is allowed only
 	// in Destinations, and only alone in its selector.
 	Service string `json:"service,omitempty"`
-	// RDS picks the RDS database instance with this DB identifier.
+	// RDS picks the database endpoint of the RDS DB instance
+	// (KindDBInstance) whose DBInstanceIdentifier is this.
 	RDS string `json:"rds,omitempty"`
 	// ARN picks the AWS resource the ARN names. Only its resource part is
-	// compared, since stored objects keep no ARNs or account IDs.
+	// compared, since stored objects keep no ARNs or account IDs, so only a
+	// resource whose identity is kept can match: an RDS DB instance
+	// ("db:<identifier>"), an EC2 instance ("instance/<id>") or a load
+	// balancer ("loadbalancer/app/<name>/<id>",
+	// "loadbalancer/net/<name>/<id>", "loadbalancer/<name>"). Any other ARN
+	// picks nothing.
 	ARN string `json:"arn,omitempty"`
-	// Tags picks the AWS resources whose tags include every pair; only tags
-	// that KeptFields keeps can match.
+	// Tags picks the AWS resources whose tags include every pair. Only RDS
+	// and EC2 instances keep tags, and only under the keys
+	// ClusterProfile.KeptTagKeys lists, so a pair with another key picks
+	// nothing.
 	Tags map[string]string `json:"tags,omitempty"`
 }
 

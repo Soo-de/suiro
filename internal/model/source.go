@@ -40,6 +40,10 @@ type Source struct {
 	Git     *GitSource     `json:"git,omitempty"`
 	AWS     *AWSSource     `json:"aws,omitempty"`
 	Cluster *ClusterSource `json:"cluster,omitempty"`
+	// KeptTagKeys is set on an aws source only: the environment's
+	// ClusterProfile.KeptTagKeys, which inputs copies here for
+	// cloud-collector (see ReduceBody). The registrations file cannot set it.
+	KeptTagKeys []string `json:"keptTagKeys,omitempty"`
 }
 
 // ClusterSource locates the cluster whose namespaces cloud-collector reads.

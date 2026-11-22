@@ -234,7 +234,10 @@ type Resource struct {
 	Kind       ResourceKind `json:"kind"`
 	Name       string       `json:"name"`
 	Interfaces []string     `json:"interfaces"`
-	Origin     Origin       `json:"origin"`
+	// Tags are the kept tags (ClusterProfile.KeptTagKeys) of the RDS or EC2
+	// instance the resource is; nil for a resource made of interfaces alone.
+	Tags   map[string]string `json:"tags,omitempty"`
+	Origin Origin            `json:"origin"`
 }
 
 // NodeGroup is a group of nodes pods can be placed on: one placement class
@@ -330,6 +333,14 @@ type ClusterProfile struct {
 	// source declares and the cluster read does not hold, as when the
 	// cluster cannot be read. Nil adds none.
 	NamespaceLabels map[string]map[string]string `json:"namespaceLabels,omitempty"`
+	// KeptTagKeys are the AWS tag keys whose tags cloud-collector keeps on
+	// the RDS and EC2 instances it reads, so EndpointSelector.Tags can match
+	// them; every other tag is dropped before it leaves cloud-collector.
+	// Tags can hold anything, so nil keeps none and keeping one is the
+	// admin's choice. inputs passes the list to cloud-collector
+	// (Source.KeptTagKeys), and like the whole profile it is part of the
+	// fingerprint. Sorted and without repeats.
+	KeptTagKeys []string `json:"keptTagKeys,omitempty"`
 	// Sources names, per JSON field name above, where its value came from.
 	// It is set in the merged profile an analysis assumed
 	// (Analysis.Profile); in an admin-entered profile every value is the
