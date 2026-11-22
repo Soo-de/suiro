@@ -4,12 +4,22 @@ import (
 	"context"
 	"errors"
 
+	"github.com/Soo-de/suiro/internal/core/sets"
 	"github.com/Soo-de/suiro/internal/model"
 )
 
 // ErrNoPath is returned by Explain for a key that names no path of the
 // Bundle.
 var ErrNoPath = errors.New("core: no such path")
+
+// NewAnalyzer returns the Analyzer that translates each snapshot with the
+// adapter of its kind, builds every set from a Space that newSpace returns
+// (one per worker of each analysis, see sets.Space) and runs under opts. It
+// errors when two adapters share a Kind, newSpace is nil, or a limit in
+// opts is not positive.
+func NewAnalyzer(adapters []Adapter, newSpace func() sets.Space, opts Options) (Analyzer, error) {
+	panic("core: NewAnalyzer is not implemented")
+}
 
 // Options are the settings an Analyzer is built with. Limits live here and
 // not in the Bundle, so a pull request cannot raise them.

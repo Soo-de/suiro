@@ -4,9 +4,27 @@ linters:
   default: standard
   enable:
     - bodyclose
+    - depguard
     - errorlint
     - gosec
     - misspell
+  settings:
+    depguard:
+      rules:
+        # Property testing and the test helpers never reach a program.
+        test-only:
+          files:
+            - "$all"
+            - "!$test"
+            - "!**/internal/testutil/**"
+            - "!**/internal/core/sets/settest/**"
+          deny:
+            - pkg: pgregory.net/rapid
+              desc: test-only dependency; import it from tests or the test helper packages
+            - pkg: github.com/Soo-de/suiro/internal/testutil
+              desc: test helper; import it from tests only
+            - pkg: github.com/Soo-de/suiro/internal/core/sets/settest
+              desc: test helper; import it from tests only
 
 formatters:
   enable:

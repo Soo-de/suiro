@@ -1,9 +1,15 @@
 package model
 
 import (
+	"encoding/json"
+	"errors"
 	"maps"
 	"slices"
 )
+
+// ErrNumberTooLarge is returned by ReduceBody for a kept number beyond
+// ±2^53; the caller leaves the object out with ReasonNumberTooLarge.
+var ErrNumberTooLarge = errors.New("model: number beyond 2^53 in a kept field")
 
 // Object kinds the adapters translate or the collectors read.
 const (
@@ -95,6 +101,18 @@ var kubeIdentityFields = []FieldPath{
 func KeptFields(kind ObjectKind) ([]FieldPath, bool) {
 	f, ok := keptFields[kind]
 	return slices.Clone(f), ok
+}
+
+// ReduceBody returns raw, the JSON body of one object of kind, with only what
+// that kind keeps: KeptFields(kind) plus, for a Kubernetes kind,
+// KubeIdentityFields, with the further reductions FieldPath lists and the
+// rule KeptFields gives for a Kubernetes kind without an entry. It is the
+// one implementation of the whitelist: the renderer, cloud-collector and
+// test helpers all call it. It errors when raw is not a JSON object or kind
+// is an AWS kind without an entry, and with ErrNumberTooLarge when a kept
+// number is beyond ±2^53.
+func ReduceBody(kind ObjectKind, raw json.RawMessage) (json.RawMessage, error) {
+	panic("model: ReduceBody is not implemented")
 }
 
 // KeptKinds returns every kind KeptFields has an entry for, sorted.
