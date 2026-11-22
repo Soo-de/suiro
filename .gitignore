@@ -40,6 +40,8 @@ coverage.*
 __debug_bin*
 go.work
 go.work.sum
+# Failing inputs rapid saves for local replay
+**/testdata/rapid/
 
 # UI: the build lands in ui/dist/app, embedded into the server; the placeholder
 # keeps go build working before the UI is built

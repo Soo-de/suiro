@@ -3,6 +3,6 @@
 // model.KeptFields (VPC, subnet, route table, Security Group, Network ACL,
 // network interface, NAT gateway, instance, EKS cluster, node group and the
 // VPC CNI add-on) and nothing else. Each object is reduced to its kept
-// fields before it leaves the package, which also drops account IDs and
-// ARNs.
+// fields by model.ReduceBody before it leaves the package, which also drops
+// account IDs and ARNs.
 package awsread

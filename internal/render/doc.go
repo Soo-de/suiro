@@ -8,6 +8,7 @@
 // not a dropped source, and so does a render that would need a file sent
 // truncated (rpc.File.Truncated). An expectations file with more entries
 // than the configured limit is invalid as a whole. Every object leaves
-// reduced to model.KeptFields plus model.KubeIdentityFields, so Secret data
-// and environment variables never leave the renderer.
+// reduced by model.ReduceBody to model.KeptFields plus
+// model.KubeIdentityFields, so Secret data and environment variables never
+// leave the renderer.
 package render

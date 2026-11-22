@@ -41,6 +41,12 @@ type AddrSet interface {
 // Space builds sets of one representation. The first Space keeps sorted
 // interval lists; a BDD Space can replace it without changing callers,
 // which receive the Space and never construct sets otherwise.
+//
+// A Space and the sets it built are used by one goroutine at a time,
+// because an implementation may share state among them (a BDD node table).
+// Core therefore takes a function that returns a new Space and calls it
+// once per worker of every analysis; sets never cross workers. Mixing sets
+// of two Spaces is a programming error and may panic.
 type Space interface {
 	// Ports returns the union of ranges. model.ProtocolAll stands for both
 	// TCP and UDP. No ranges gives the empty set.
@@ -48,4 +54,10 @@ type Space interface {
 	// Addrs returns the union of the IPv4 prefixes; IPv6 prefixes are
 	// outside the model and add nothing. No prefixes gives the empty set.
 	Addrs(prefixes ...netip.Prefix) AddrSet
+}
+
+// NewIntervalSpace returns the Space of sorted interval lists. Its sets
+// share no state.
+func NewIntervalSpace() Space {
+	panic("sets: NewIntervalSpace is not implemented")
 }
