@@ -18,8 +18,8 @@ var ErrNoCompleteRead = errors.New("rpc: no complete read of the key")
 
 // Collector reads sources and publishes their complete reads. git-collector
 // implements it for model.SourceGit (target branch and open pull requests),
-// cloud-collector for model.SourceAWS; a future reader for another cloud
-// implements the same contract. inputs, in the server, is the only caller.
+// cloud-collector for model.SourceAWS and model.SourceCluster; a future
+// reader for another cloud implements the same contract. inputs, in the server, is the only caller.
 //
 // A collector holds its watch list and its latest snapshots only in memory
 // and has no database: after a restart it reads everything again, and the

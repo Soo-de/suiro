@@ -3,7 +3,11 @@
 // platform repository. It watches the collectors through rpc.Collector,
 // fetches a snapshot only when an announced digest differs from the stored
 // one, stores reads, assembles a model.Bundle per baseline and per open
-// pull request, and calls core.Analyzer.
+// pull request, and calls core.Analyzer. The environment whose registration
+// sets cluster gets one more source, "cluster/<environment>", read by
+// cloud-collector; like the AWS source it raises a stale-read reason
+// (model.ReasonClusterReadStale) once its last complete read is older than
+// the configured limit.
 //
 // It recomputes the digest of every snapshot it fetches with
 // model.ComputeDigest and rejects one that does not match, keeping the

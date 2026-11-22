@@ -7,7 +7,9 @@
 // Selectors stay unresolved for core. Unsupported policy kinds and
 // controller-managed AWS objects are flagged with their reason codes. It
 // also turns the source's expectation entries (model.KindExpectation) into
-// the fragment's required expectations.
+// the fragment's required expectations, and translates the snapshots of a
+// model.SourceCluster source, which hold Namespace objects only, into the
+// fragment's namespaces.
 //
 // It applies the defaults the API server writes into an object on create,
 // which no cluster setting changes, from one table kept by Kubernetes

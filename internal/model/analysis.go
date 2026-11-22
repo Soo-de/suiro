@@ -56,16 +56,16 @@ type Bundle struct {
 	Sources []Source `json:"sources"`
 	// Snapshots are the after side: at most one per source, sorted by Key.
 	Snapshots []Snapshot `json:"snapshots"`
-	// DeclaredNamespaces holds, for each git source, every namespace its
-	// objects declared (metadata.namespace) in its latest usable reads, which
-	// an input-level problem of the source also covers (LevelInput). A
+	// UsedNamespaces holds, for each git source, every namespace its
+	// objects used (metadata.namespace) in its latest usable reads, which an
+	// input-level problem of the source also covers (LevelInput). A
 	// usable read is a complete read whose content rendered, so it carries
 	// no input-level problem. A source read at its target branch takes that
 	// key's last usable read; a source read at a pull request's test merge
 	// commit takes the union of the last usable reads of the pull request
 	// key and of the target branch key. Each list is sorted and without
 	// repeats.
-	DeclaredNamespaces map[SourceID][]string `json:"declaredNamespaces,omitempty"`
+	UsedNamespaces map[SourceID][]string `json:"usedNamespaces,omitempty"`
 	// Problems are what inputs found before analysis, each with a SourceID
 	// as Subject: no complete read yet (ReasonSourceUnread), a read older
 	// than the last attempt (ReasonSourceStale), an ignored snapshot

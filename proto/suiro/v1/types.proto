@@ -16,6 +16,7 @@ enum SourceKind {
   SOURCE_KIND_UNSPECIFIED = 0;
   SOURCE_KIND_GIT = 1;
   SOURCE_KIND_AWS = 2;
+  SOURCE_KIND_CLUSTER = 3;
 }
 
 // RenderKind is how the renderer turns a source's files into objects.
@@ -27,14 +28,15 @@ enum RenderKind {
 }
 
 // Source is what a collector needs to read one source (model.Source, minus
-// the owner, which collectors do not need). Exactly one of git and aws is
-// set, matching kind.
+// the owner, which collectors do not need). Exactly one of git, aws and
+// cluster is set, matching kind.
 message Source {
   string id = 1;
   SourceKind kind = 2;
   string environment = 3;
   GitSource git = 4;
   AwsSource aws = 5;
+  ClusterSource cluster = 6;
 }
 
 // GitSource locates an application's manifests (model.GitSource).
@@ -67,6 +69,10 @@ message AwsSource {
   string vpc_id = 2;
   string cluster_name = 3;
 }
+
+// ClusterSource locates the cluster whose namespaces cloud-collector reads,
+// the one it runs in (model.ClusterSource); it has no fields yet.
+message ClusterSource {}
 
 // PullRequest is an open pull request (model.PullRequest). merge_sha is
 // empty when it cannot merge.
