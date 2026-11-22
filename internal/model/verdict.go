@@ -48,9 +48,10 @@ const (
 // EndpointKey identifies a node of the graph across analyses: a workload's
 // controller ObjectKey ("k8s:apps/Deployment/payments/api"), an AWS
 // resource's key ("aws:database/orders-db"), EndpointInternet,
-// EndpointExternalPrivate, or a named private network's
-// "external-private:<name>". Paths and changes are keyed by it, never by IP
-// address.
+// EndpointExternalPrivate, EndpointLinkLocal, or a named network's
+// "external-private:<name>" or "link-local:<name>". Paths and changes are
+// keyed by it, never by IP address. No key holds a space (see
+// NamedNetwork), so PathKey's written form parses back unambiguously.
 type EndpointKey string
 
 const (
@@ -65,6 +66,16 @@ const (
 	// CIDRs, ClusterProfile.PodCIDRs and the named networks. Without it a
 	// rule for an internal range such as 10.0.0.0/8 would face no endpoint.
 	EndpointExternalPrivate EndpointKey = "external-private"
+	// EndpointLinkLocal is the link-local block 169.254.0.0/16 (RFC 3927)
+	// that no ClusterProfile.LinkLocalNetworks entry names. Without it,
+	// egress to the instance metadata service or a node-local DNS cache
+	// would face no endpoint; a forbidden rule names it, or a named part,
+	// through EndpointSelector.Endpoints. Its addresses never leave their
+	// link, and AWS filters them with no Security Group, Network ACL or
+	// route, so a path there has Kubernetes steps only; what the host lets
+	// through (the instance metadata hop limit, a host firewall) is not
+	// examined.
+	EndpointLinkLocal EndpointKey = "link-local"
 )
 
 // EndpointKind is what an endpoint is.
@@ -77,6 +88,9 @@ const (
 	// EndpointKindExternalPrivate is EndpointExternalPrivate or a named
 	// private network.
 	EndpointKindExternalPrivate EndpointKind = "external-private"
+	// EndpointKindLinkLocal is EndpointLinkLocal or a named link-local
+	// network.
+	EndpointKindLinkLocal EndpointKind = "link-local"
 )
 
 // Endpoint is a graph node with its resolved placement classes.
@@ -88,7 +102,8 @@ type Endpoint struct {
 	// Classes are the places the endpoint can be, in class order (see the
 	// package comment): for a workload one per (node group, subnet, address
 	// part) its constraints allow, for an AWS resource one per interface,
-	// for the internet and external private networks one per address part.
+	// for the internet and the external private and link-local networks
+	// one per address part.
 	// In an environment without an AWS layer
 	// a workload has the single class ClassCluster, whose Addresses are
 	// ClusterProfile.PodCIDRs (none when unknown): node and subnet change no
@@ -122,16 +137,17 @@ type Endpoint struct {
 // endpoint's pairs (see Limits).
 type PlacementClass struct {
 	// Name is a short label for people: "<node group>/<subnet>",
-	// "<interface>", "internet", "external-private", ClassCluster or
+	// "<interface>", the network's endpoint key for the internet and the
+	// external private and link-local networks, ClassCluster or
 	// ClassUnknown, with an address suffix when split.
 	Name           string   `json:"name"`
 	NodeGroup      string   `json:"nodeGroup,omitempty"`
 	Subnet         string   `json:"subnet,omitempty"`
 	SecurityGroups []string `json:"securityGroups,omitempty"`
 	// Addresses are the addresses this class may hold, a subset of the
-	// subnet's (for the internet and external private networks, of their
-	// address space; for ClassCluster, of the pod CIDRs), as the fewest
-	// prefixes that cover them.
+	// subnet's (for a network endpoint, of its address space; for
+	// ClassCluster, of the pod CIDRs), as the fewest prefixes that cover
+	// them.
 	Addresses []netip.Prefix `json:"addresses"`
 	// PublicAddress says traffic from this class can carry a public address
 	// to an internet gateway: the node's (pods leave the VPC as the node)
