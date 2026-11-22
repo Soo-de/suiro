@@ -268,11 +268,13 @@ const (
 	// GetSnapshot shares with the server. The collector publishes it with no
 	// objects and this problem, never cut short.
 	ReasonSnapshotLimit ReasonCode = "snapshot-limit"
-	// ReasonAnalysisLimit: one of the Limits was reached, and what its field
-	// names is cut off. The Subject is the limit's JSON name; the Message
-	// gives the limit and the value the input needed, written "at least N"
-	// where that value cannot be known without finishing the work, as for
-	// Evaluations.
+	// ReasonAnalysisLimit: one of the Limits was reached, and the pairs its
+	// field names are cut off. It reaches the Unknown paths each such pair
+	// gets in place of its own (see Limits), and expectations only through
+	// them, like any other path. The Subject is the limit's JSON name; the
+	// Message gives the limit and the value the input needed, written "at
+	// least N" where that value cannot be known without finishing the work,
+	// as for Evaluations.
 	ReasonAnalysisLimit ReasonCode = "analysis-limit"
 	// ReasonAnalysisTimeout: the analysis did not finish within its time
 	// budget, so it is AnalysisFailed. The Subject is the environment.
