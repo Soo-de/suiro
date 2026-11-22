@@ -8,7 +8,12 @@
 // model.ResourceDatabase endpoint named by its identifier, whose
 // interfaces are the RDS interfaces in its subnet group's subnets that
 // carry its VPC Security Groups; an interface that fits several instances
-// is a possible place of each.
+// is a possible place of each. An EC2 instance becomes a
+// model.ResourceInstance endpoint named by its instance ID, whose
+// interfaces are the ones attached to it, unless it is a node of the
+// cluster (its eks:cluster-name tag names the environment's EKS cluster):
+// a node is never an endpoint, only a place where workloads run, mapped to
+// its node group and the Security Groups it carries.
 //
 // Protocol "-1" becomes model.ProtocolAll. IPv6 fields are not kept, so a
 // Security Group rule left with no IPv4 range, group or prefix list, a

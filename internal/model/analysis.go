@@ -366,13 +366,14 @@ type EndpointSelector struct {
 	// ARN picks the AWS resource the ARN names. Only its resource part is
 	// compared, since stored objects keep no ARNs or account IDs, so only a
 	// resource whose identity is kept can match: an RDS DB instance
-	// ("db:<identifier>"), an EC2 instance ("instance/<id>") or a load
-	// balancer ("loadbalancer/app/<name>/<id>",
-	// "loadbalancer/net/<name>/<id>", "loadbalancer/<name>"). Any other ARN
-	// picks nothing.
+	// ("db:<identifier>"), an EC2 instance that is not a cluster node
+	// ("instance/<id>"; see ResourceInstance) or a load balancer
+	// ("loadbalancer/app/<name>/<id>", "loadbalancer/net/<name>/<id>",
+	// "loadbalancer/<name>"). Any other ARN picks nothing.
 	ARN string `json:"arn,omitempty"`
-	// Tags picks the AWS resources whose tags include every pair. Only RDS
-	// and EC2 instances keep tags, and only under the keys
+	// Tags picks the AWS resources whose tags include every pair. Only the
+	// endpoints of RDS DB instances and of EC2 instances that are not
+	// cluster nodes have tags, and only those under the keys
 	// ClusterProfile.KeptTagKeys lists, so a pair with another key picks
 	// nothing.
 	Tags map[string]string `json:"tags,omitempty"`

@@ -208,8 +208,10 @@ var keptFields = map[ObjectKind][]FieldPath{
 		"NatGatewayAddresses[].PublicIp",
 		"NatGatewayAddresses[].PrivateIp",
 	},
-	// Instances are read only to map nodes to node groups and to the
-	// Security Groups they actually carry.
+	// An instance keeps its place on the network and the tags that tell a
+	// node: a node of the cluster maps to its node group and the Security
+	// Groups it carries, and any other instance is an endpoint named by its
+	// InstanceId (see ResourceInstance).
 	KindInstance: {
 		"InstanceId", "SubnetId", "VpcId",
 		"PrivateIpAddress", "PublicIpAddress",
