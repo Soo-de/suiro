@@ -325,9 +325,15 @@ type ClusterProfile struct {
 	// Nil adds none.
 	NotInternet []netip.Prefix `json:"notInternet,omitempty"`
 	// PrivateNetworks name parts of the external private address space (an
-	// office VPN, a peered network), each its own endpoint; the rest stays
-	// in EndpointExternalPrivate. Nil names none.
-	PrivateNetworks []PrivateNetwork `json:"privateNetworks,omitempty"`
+	// office VPN, a peered network), each its own endpoint
+	// "external-private:<Name>"; the rest stays in EndpointExternalPrivate.
+	// Nil names none.
+	PrivateNetworks []NamedNetwork `json:"privateNetworks,omitempty"`
+	// LinkLocalNetworks name parts of the link-local block (the instance
+	// metadata service at 169.254.169.254/32), each its own endpoint
+	// "link-local:<Name>"; the rest stays in EndpointLinkLocal. Nil names
+	// none.
+	LinkLocalNetworks []NamedNetwork `json:"linkLocalNetworks,omitempty"`
 	// NamespaceLabels are labels an admin enters by namespace name, the last
 	// of the sources Namespace lists: used only for a namespace that no git
 	// source declares and the cluster read does not hold, as when the
@@ -348,11 +354,14 @@ type ClusterProfile struct {
 	Sources map[string]ProfileSource `json:"sources,omitempty"`
 }
 
-// PrivateNetwork is a named part of the external private address space.
-// Its Prefixes lie in PrivateIPv4 or ClusterProfile.NotInternet; its
-// endpoint's key is "external-private:<Name>", and Name is unique in the
-// profile.
-type PrivateNetwork struct {
+// NamedNetwork is a named part of an address space with a catch-all
+// endpoint: of the external private space, when its Prefixes lie in
+// PrivateIPv4 or ClusterProfile.NotInternet, or of the link-local block.
+// Name is a DNS label (RFC 1123: 1 to 63 lowercase letters, digits and
+// "-", starting and ending with a letter or digit), unique among the
+// networks of its space; a profile with another name is rejected when it
+// is saved, which keeps endpoint keys free of spaces (see EndpointKey).
+type NamedNetwork struct {
 	Name     string         `json:"name"`
 	Prefixes []netip.Prefix `json:"prefixes"`
 }

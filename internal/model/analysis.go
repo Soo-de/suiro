@@ -172,10 +172,12 @@ type Analysis struct {
 	Profile   ClusterProfile `json:"profile"`
 	Endpoints []Endpoint     `json:"endpoints"`
 	// Paths are computed for every ordered pair of two different endpoints
-	// with at least one workload end, and from the internet and external
-	// private networks to AWS resources, which forbidden rules ask about.
-	// Pairs between AWS resources, between the internet and external private
-	// networks, and from an endpoint to itself are not computed.
+	// with at least one workload end, except from a link-local network, and
+	// from the internet and external private networks to AWS resources,
+	// which forbidden rules ask about. No other pair is computed: none
+	// between AWS resources, from an AWS resource to a network (the
+	// internet, an external private or a link-local one), between networks,
+	// from a link-local network, or from an endpoint to itself.
 	Paths      []Path       `json:"paths"`
 	Changes    []Change     `json:"changes,omitempty"`
 	Findings   []Finding    `json:"findings,omitempty"`
