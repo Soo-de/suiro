@@ -29,10 +29,12 @@
 // accepted by analyzing the baseline on it first: pull requests move to
 // that read only once that baseline is in force, so their Changes never
 // show an AWS change they did not make. The baseline's own Changes show
-// what the new read changed. Staleness follows the read a Bundle uses
-// (model.ReasonAWSReadStale): a pull request kept on an older read while
-// baselines on a newer one fail reports it once that read passes the age
-// limit.
+// what the new read changed. Staleness follows the digest a Bundle uses
+// (model.ReasonAWSReadStale), timed from the last complete read that
+// returned it (store.ReadRecord.LastCompleteReadAt), not from when that
+// content was first read: an unchanged AWS state stays fresh while reads
+// succeed, and a pull request kept on an older digest while baselines on a
+// newer one fail reports it once the limit passes.
 //
 // A Before made with another model.SchemaVersion or model.AlgorithmVersion,
 // or, for a pull request, resting on another aws read than the Bundle's, is
