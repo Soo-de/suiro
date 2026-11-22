@@ -5,6 +5,11 @@ import "slices"
 // ReasonCode names why something was not judged normally. Every warning,
 // Undetermined step and Unknown verdict carries one. Codes travel as
 // strings on every wire, so a new code needs no proto change.
+//
+// A problem's Subject is what the comment of its code, or of the code's
+// group, names; else what the code's scope names (see ReasonScope), or
+// Bundle.Problems for the problems inputs finds; else the ObjectKey,
+// SourceID, EndpointKey, GateID or file path the problem is about.
 type ReasonCode string
 
 // ReasonLevel is what a reason does to verdicts.
