@@ -293,8 +293,25 @@ type Expectation struct {
 	// ExpectRequired and unused for ExpectForbidden.
 	SourceQuantifier      Quantifier `json:"sourceQuantifier,omitempty"`
 	DestinationQuantifier Quantifier `json:"destinationQuantifier,omitempty"`
-	Origin                Origin     `json:"origin"`
+	// Mode is set on forbidden rules by whoever edits them; a required
+	// expectation from an expectations file always warns.
+	Mode   RuleMode `json:"mode,omitempty"`
+	Origin Origin   `json:"origin"`
 }
+
+// RuleMode is what a finding of a rule does to a pull request. The empty
+// value, that of older records, reads as ModeWarn.
+type RuleMode string
+
+const (
+	// ModeWarn findings warn when New.
+	ModeWarn RuleMode = "warn"
+	// ModeBlock findings stop the pull request when New: violated, or
+	// unverifiable for any reason, a reached limit included. So a critical
+	// rule never passes unchecked, and a pull request cannot get past it by
+	// growing the input beyond what the analysis computes.
+	ModeBlock RuleMode = "block"
+)
 
 // HygieneCheck is a built-in check on objects rather than paths.
 type HygieneCheck string
@@ -319,7 +336,7 @@ type HygieneRule struct {
 
 // RuleSet is the forbidden paths and hygiene checks in force at one version.
 // Built-in checks are seeded on install and enabled; an admin can disable
-// or edit them.
+// or edit them, the mode of each forbidden rule included.
 type RuleSet struct {
 	Version   int64         `json:"version"`
 	Forbidden []Expectation `json:"forbidden,omitempty"`
@@ -417,7 +434,10 @@ type Finding struct {
 	// expectation's Ports had a better status on the before side. Only new
 	// findings warn on a pull request; the rest are existing problems listed
 	// on the open issues page.
-	New     bool         `json:"new"`
+	New bool `json:"new"`
+	// Mode is the rule's mode when the analysis ran (see RuleMode); empty
+	// for a hygiene finding, which only warns.
+	Mode    RuleMode     `json:"mode,omitempty"`
 	Paths   []PathKey    `json:"paths,omitempty"`
 	Reasons []ReasonCode `json:"reasons,omitempty"`
 	// Origin is where the expectation is declared or, for a hygiene
