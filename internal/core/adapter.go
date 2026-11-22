@@ -17,9 +17,10 @@ import (
 // ACL) and leaves selectors unresolved. Core applies the semantics, because
 // a policy can select pods of another source's workloads. What it does
 // restate follows the platform: a default the platform's API fixes is
-// written out (an omitted protocol becomes TCP), an unwritten field that
-// means "every" becomes the explicit form (model.Peer.All, model.AllPorts),
-// and an element outside the model is dropped as model.Protocol describes.
+// written out (an omitted protocol becomes TCP), a field that means
+// "every" when unwritten or empty becomes the explicit form
+// (model.Peer.All, model.AllPorts), and an element outside the model is
+// dropped as model.Protocol describes.
 // It raises only the reason codes whose model.Reasons row names
 // model.ProducerAdapter.
 type Adapter interface {

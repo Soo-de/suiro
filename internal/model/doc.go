@@ -38,17 +38,17 @@
 // Missing or unreadable input never becomes an allow:
 //   - An element outside the model whose meaning is certain (an SCTP or ICMP
 //     port, an IPv6 peer) is dropped, because it touches only traffic the
-//     model leaves out (UnexaminedIPv6). A rule left with no peers or no
-//     ports is dropped whole and raises ReasonRuleOutsideModel; it never
-//     widens to everything.
+//     model leaves out (UnexaminedIPv6). A rule that dropping leaves with no
+//     peers or no ports is dropped whole and raises ReasonRuleOutsideModel;
+//     it never widens to everything.
 //   - Input whose meaning cannot be known (an invalid object, an unresolved
 //     symbolic link, a custom kind that creates pods, an endpoint with no
 //     placement) makes Undetermined only what it can affect. Reasons holds,
 //     for every code, who raises it, its level and its scope.
-//   - "Every" is never read from an empty list. A field the source leaves
-//     unwritten that means "every" becomes an explicit form (Peer.All,
-//     AllPorts), and Fragment.Validate rejects a rule with no peers or no
-//     ports.
+//   - "Every" is never read from an empty list of the model. A source field
+//     that means "every" when unwritten or empty, as a NetworkPolicy rule's
+//     from, to and ports do, becomes an explicit form (Peer.All, AllPorts),
+//     and Fragment.Validate rejects a rule with no peers or no ports.
 //   - A default the platform fixes is applied as the platform applies it:
 //     an omitted Kubernetes port protocol is TCP. Behavior that depends on
 //     the installation (whether NetworkPolicies are enforced, whether ipBlock
