@@ -8,7 +8,8 @@ import (
 )
 
 // ErrNumberTooLarge is returned by ReduceBody for a kept number beyond
-// ±2^53; the caller leaves the object out with ReasonNumberTooLarge.
+// ±2^53; the caller publishes the read without objects
+// (ReasonNumberTooLarge).
 var ErrNumberTooLarge = errors.New("model: number beyond 2^53 in a kept field")
 
 // Object kinds the adapters translate or the collectors read.
