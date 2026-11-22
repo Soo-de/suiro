@@ -149,6 +149,11 @@ const (
 	// not use their node's groups; their Security Group steps are
 	// Undetermined.
 	ReasonPodSecurityGroups ReasonCode = "pod-security-groups"
+	// ReasonNodeSecurityGroupsMixed: the nodes of one node group carry
+	// different Security Groups, so which ones a pod's node carries cannot
+	// be told; the Security Group steps of the group's classes are
+	// Undetermined, so no class mixes them (see PlacementClass).
+	ReasonNodeSecurityGroupsMixed ReasonCode = "node-security-groups-mixed"
 	// ReasonCustomNetworking: VPC CNI custom networking puts pods in other
 	// subnets and groups than their nodes; their AWS steps are
 	// Undetermined.
@@ -384,6 +389,7 @@ var reasons = map[ReasonCode]ReasonSpec{
 	ReasonSecurityGroupUnresolved:  row(LevelGate, ScopeStep, ProducerCore),
 	ReasonEphemeralPortsPartial:    row(LevelGate, ScopeStep, ProducerCore),
 	ReasonPodSecurityGroups:        row(LevelGate, ScopeStep, ProducerAdapter, ProducerCore),
+	ReasonNodeSecurityGroupsMixed:  row(LevelGate, ScopeStep, ProducerAdapter, ProducerCore),
 	ReasonCustomNetworking:         row(LevelGate, ScopeStep, ProducerAdapter, ProducerCore),
 	ReasonPlacementUnknown:         row(LevelGate, ScopeStep, ProducerCore),
 	ReasonNoPlacement:              row(LevelGate, ScopeEndpoint, ProducerCore),

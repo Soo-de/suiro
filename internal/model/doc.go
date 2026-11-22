@@ -66,9 +66,14 @@
 // Destination, then the port range's Protocol and From); Findings by Rule,
 // then Subject; Inputs by Key (Source, then PullRequest); Problems by
 // Reason, Subject, Origin.File, then Origin.Locator; Unexamined and every
-// Reasons list by value. A PathDetail's Classes are sorted by source class
-// Name, destination class Name, then SameNode, and each class's Gates are in
-// path order with Members and Owners sorted.
+// Reasons list by value.
+//
+// Placement classes are in class order: by NodeGroup, Subnet, Addresses
+// (compared as lists, each prefix by address, then length), then Name.
+// Class pairs are in pair order: by source class, destination class, then
+// SameNode, false first. Endpoint.Classes, Path.Outcomes, a PathDetail's
+// Classes and every class pair list of a Change follow them; each class's
+// Gates are in path order with Members and Owners sorted.
 //
 // JSON field names are the wire and storage names: the HTTP API, documents in
 // the database, and the YAML files, which are read through a YAML-to-JSON

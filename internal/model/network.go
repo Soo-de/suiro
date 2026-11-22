@@ -243,7 +243,8 @@ type NodeGroup struct {
 	Name    string   `json:"name"`
 	Subnets []string `json:"subnets"`
 	// SecurityGroups are the groups on the nodes' interfaces; without pod
-	// Security Groups, pods use them.
+	// Security Groups, pods use them. Nodes of the group that carry
+	// different ones raise ReasonNodeSecurityGroupsMixed.
 	SecurityGroups []string          `json:"securityGroups"`
 	Labels         map[string]string `json:"labels,omitempty"`
 	Taints         []Taint           `json:"taints,omitempty"`
