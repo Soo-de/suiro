@@ -221,11 +221,13 @@ type Limits struct {
 	// cut the port space into; a pair past it is cut off.
 	PortRangesPerPair int `json:"portRangesPerPair"`
 	// Evaluations is the most chain evaluations of one analysis, each pair
-	// × port range × class pair counted once, and once more for each backend
-	// of a Service an expectation names. The budget goes to pairs in
-	// canonical order, then to expectations in ID order: the pair or
-	// expectation it runs out on and every later one are cut off, and an
-	// expectation cut off is Unverifiable with ReasonAnalysisLimit.
+	// × port range × class pair counted once. The budget goes to pairs in
+	// canonical order, a pair only when all its evaluations fit in what is
+	// left: the first pair that does not fit and every later one are cut
+	// off. Expectations draw nothing from it. They are judged on every path,
+	// cut-off ones included, so an answer computed before the cut stands
+	// (see ExpectationStatus) and a forbidden rule keeps one finding per
+	// path.
 	Evaluations int `json:"evaluations"`
 }
 
