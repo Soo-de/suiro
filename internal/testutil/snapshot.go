@@ -18,7 +18,8 @@ import (
 // and its Origin from key's source, file and the document's first line.
 // Namespaces are taken as written, never defaulted. Objects are sorted by
 // key, and the digest is model.ComputeDigest's. For a pull request key the
-// caller sets PullRequest. A document it cannot read fails t.
+// caller sets PullRequest. A document it cannot read, or two documents with
+// one key, which a snapshot never holds, fail t.
 func Snapshot(t testing.TB, key model.ReadKey, file, docs string) model.Snapshot {
 	t.Helper()
 	s := model.Snapshot{Key: key, ContractVersion: model.ContractVersion, Objects: []model.Object{}}
@@ -57,6 +58,11 @@ func Snapshot(t testing.TB, key model.ReadKey, file, docs string) model.Snapshot
 		})
 	}
 	slices.SortFunc(s.Objects, func(a, b model.Object) int { return strings.Compare(string(a.Key), string(b.Key)) })
+	for i := 1; i < len(s.Objects); i++ {
+		if a, b := s.Objects[i-1], s.Objects[i]; a.Key == b.Key {
+			t.Fatalf("%s:%d and %s:%d: both are %s", file, a.Origin.Line, file, b.Origin.Line, a.Key)
+		}
+	}
 	digest, err := model.ComputeDigest(s)
 	if err != nil {
 		t.Fatalf("%s: %v", file, err)
