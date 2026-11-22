@@ -81,8 +81,8 @@
 //     Endpoint.Classes, Path.Outcomes, a PathDetail's Classes and every
 //     class pair list of a Change follow them.
 //   - A class's Gates in path order; a step's Rules by Gate,
-//     Origin.Locator, then Return (false first), and its Mappings by
-//     Protocol, then Port.
+//     Origin.Locator, then Return (false first); an endpoint's Services by
+//     Name; and every Mappings list by Protocol, then Port.
 //
 // JSON field names are the wire and storage names: the HTTP API, documents in
 // the database, and the YAML files, which are read through a YAML-to-JSON
