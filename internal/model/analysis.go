@@ -199,12 +199,13 @@ type Analysis struct {
 // fails the analysis; it cuts off the pairs its field names, the same ones
 // however the work was scheduled. Every endpoint stays listed, and a pair
 // cut off gets, in place of its paths, one Unknown path per protocol over
-// every port (tcp and udp, 0-65535) with ReasonAnalysisLimit, whose class
-// pairs are all Undetermined, SameNode ones included wherever both ends
-// are workloads, so no placement is left out. Every limit must be
-// positive; the values come from measurement on a reference machine. Time
-// is not one of them: the time budget is ctx's deadline, and running out
-// fails the analysis, because where time runs out depends on the machine.
+// every port (tcp and udp, 0-65535) with ReasonAnalysisLimit. Its class
+// pairs, as Path derives them, are all Undetermined, and with an AWS layer
+// its SameNode is set wherever both ends are workloads, so no placement is
+// left out. Every limit must be positive; the values come from measurement
+// on a reference machine. Time is not one of them: the time budget is
+// ctx's deadline, and running out fails the analysis, because where time
+// runs out depends on the machine.
 type Limits struct {
 	// Endpoints is the most endpoints of one analysis. Past it, every pair
 	// with an endpoint beyond the first Endpoints in Key order is cut off,
