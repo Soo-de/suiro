@@ -12,6 +12,10 @@ import (
 // Bundle.
 var ErrNoPath = errors.New("core: no such path")
 
+// ErrVersion is returned by Analyze and Explain for a Bundle whose
+// SchemaVersion or AlgorithmVersion is not this build's.
+var ErrVersion = errors.New("core: bundle of another schema or algorithm version")
+
 // NewAnalyzer returns the Analyzer that translates each snapshot with the
 // adapter of its kind, builds every set from a Space that newSpace returns
 // (one per worker of each analysis, see sets.Space) and runs under opts. It
@@ -62,10 +66,11 @@ type Analyzer interface {
 	// Status is AnalysisDone, or AnalysisPartial when an input- or
 	// partial-level reason holds, a reached limit included (see
 	// model.Limits). The result passes model.Analysis.Validate. Analyze
-	// returns an error only when it cannot run at all (a canceled ctx or
-	// one past its deadline, no adapter for a snapshot kind, a fragment that
-	// fails model.Fragment.Validate, which is an adapter bug); it then
-	// returns no partial result, and an error from ctx wraps ctx.Err().
+	// returns an error only when it cannot run at all (a Bundle of another
+	// version, ErrVersion; a canceled ctx or one past its deadline; no
+	// adapter for a snapshot kind; a fragment that fails
+	// model.Fragment.Validate, which is an adapter bug); it then returns no
+	// partial result, and an error from ctx wraps ctx.Err().
 	// Unusable content becomes Undetermined steps and Unknown verdicts with
 	// reasons, never an error and never a clean result.
 	Analyze(ctx context.Context, b model.Bundle) (model.Analysis, error)
@@ -75,6 +80,9 @@ type Analyzer interface {
 	// returns for k (see model.PathDetail). A k that Analyze would not
 	// return (an endpoint not in b, a pair that is not computed, a port
 	// range that is not exactly one path's) returns ErrNoPath; other errors
-	// are those of Analyze.
+	// are those of Analyze. A Bundle rebuilt for a stored analysis carries
+	// that analysis's versions, so the detail of one made by another
+	// version returns ErrVersion and is shown as no longer available, like
+	// one whose snapshots were removed.
 	Explain(ctx context.Context, b model.Bundle, k model.PathKey) (model.PathDetail, error)
 }

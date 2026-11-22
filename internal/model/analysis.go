@@ -128,7 +128,9 @@ type Bundle struct {
 	Fingerprint Digest `json:"fingerprint"`
 	ToolVersion string `json:"toolVersion"`
 	// SchemaVersion and AlgorithmVersion are the build's (see
-	// AlgorithmVersion); the Analysis repeats them.
+	// AlgorithmVersion), or in a Bundle rebuilt to explain a stored
+	// analysis, that analysis's; core rejects any other (core.ErrVersion).
+	// The Analysis repeats them.
 	SchemaVersion    int `json:"schemaVersion"`
 	AlgorithmVersion int `json:"algorithmVersion"`
 }
