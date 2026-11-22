@@ -224,8 +224,11 @@ type ResourceKind string
 const (
 	ResourceDatabase     ResourceKind = "database"
 	ResourceLoadBalancer ResourceKind = "load-balancer"
-	ResourceInstance     ResourceKind = "instance"
-	ResourceOther        ResourceKind = "other"
+	// ResourceInstance is an EC2 instance that is not a node of the
+	// cluster. A node is never an endpoint, only a place where workloads
+	// run.
+	ResourceInstance ResourceKind = "instance"
+	ResourceOther    ResourceKind = "other"
 )
 
 // Resource is an AWS-side endpoint (a database, a load balancer, a server)
