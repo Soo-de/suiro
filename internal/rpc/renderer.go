@@ -52,7 +52,9 @@ type RenderRequest struct {
 	// and elsewhere with model.ReasonSymlinkSkipped. For model.RenderHelm,
 	// the chart dependencies git-collector fetched (allowed repositories
 	// only, at the versions Chart.lock pins) are added where helm dependency
-	// build puts them. The .git directory is never sent.
+	// build puts them. The .git directory is never sent. The whole request
+	// must fit the message size limit both ends share; over it,
+	// git-collector raises model.ReasonRenderLimit and sends nothing.
 	Files []File
 }
 
@@ -62,6 +64,12 @@ type File struct {
 	// renderer rejects absolute paths and paths with ".." segments.
 	Path    string
 	Content []byte
+	// Truncated marks a file sent with empty Content because it is binary
+	// or over the per-file size limit, so paths still resolve. A render
+	// that would read a truncated file (one under Path, or one a
+	// kustomization or chart refers to) ends with model.ReasonRenderLimit
+	// rather than render without it.
+	Truncated bool
 }
 
 // RenderResult is the outcome of one render job.

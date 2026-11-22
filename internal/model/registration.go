@@ -150,8 +150,8 @@ const (
 // ExpectationStatus).
 //
 // Validation: the renderer rejects the whole file when it does not parse,
-// has another apiVersion or kind, or has an entry without a name or two
-// entries with the same name; the adapter rejects one entry whose sources
+// has another apiVersion or kind, has more entries than the configured
+// limit, or has an entry without a name or two entries with the same name; the adapter rejects one entry whose sources
 // or destinations set no form, whose ports are missing or invalid, whose
 // quantifiers are not "all" or "any", or that names a service in its
 // sources or beside another destination form. Either raises

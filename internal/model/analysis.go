@@ -25,16 +25,19 @@ type AnalysisStatus string
 const (
 	// AnalysisDone means every input was usable.
 	AnalysisDone AnalysisStatus = "done"
-	// AnalysisPartial means some input-level or partial-level reason holds;
-	// the affected paths say which.
+	// AnalysisPartial means some input-level or partial-level reason holds,
+	// a reached limit (ReasonAnalysisLimit) included; the affected paths say
+	// which.
 	AnalysisPartial AnalysisStatus = "partial"
 	// AnalysisNoPreview is set by inputs for a pull request that changes
 	// only what no source previews (a Terraform-only change without the CLI
 	// step). It is never reported as clean.
 	AnalysisNoPreview AnalysisStatus = "no_preview"
-	// AnalysisFailed means Analyze returned an error. A failed analysis is
-	// stored and shown, but never reused: inputs analyzes the same Bundle
-	// again rather than skip it.
+	// AnalysisFailed means Analyze returned an error, running past the time
+	// budget included (ReasonAnalysisTimeout in Problems). A failed
+	// analysis holds no endpoints or paths and is never reported as clean;
+	// it is stored and shown, but never reused: inputs analyzes the same
+	// Bundle again rather than skip it.
 	AnalysisFailed AnalysisStatus = "failed"
 )
 
@@ -92,7 +95,8 @@ type Bundle struct {
 	// what ComputeFingerprint returns: the SHA-256 of the RFC 8785 canonical
 	// JSON of every other field of the Bundle, built from the fields as
 	// stated here rather than from the Go struct's encoding, lists in the
-	// order stated above and [] when empty, with these reductions:
+	// order stated above and [] when empty, plus the Limits the analyzer
+	// runs with, with these reductions:
 	//   - PullRequest keeps only RepoURL and Number, so a new commit that
 	//     changes no input reuses the stored analysis;
 	//   - each snapshot keeps only its Key and Digest, which covers its
@@ -121,9 +125,10 @@ type Bundle struct {
 	AlgorithmVersion int `json:"algorithmVersion"`
 }
 
-// ComputeFingerprint returns b's fingerprint as Bundle.Fingerprint defines
-// it, ignoring b.Fingerprint itself. It errors where ComputeDigest does.
-func ComputeFingerprint(b Bundle) (Digest, error) {
+// ComputeFingerprint returns the fingerprint of b analyzed under l, as
+// Bundle.Fingerprint defines it, ignoring b.Fingerprint itself. It errors
+// where ComputeDigest does.
+func ComputeFingerprint(b Bundle, l Limits) (Digest, error) {
 	panic("model: ComputeFingerprint is not implemented")
 }
 
@@ -169,6 +174,35 @@ type Analysis struct {
 	Findings   []Finding    `json:"findings,omitempty"`
 	Problems   []Problem    `json:"problems,omitempty"`
 	Unexamined []Unexamined `json:"unexamined"`
+	// Limits are the limits the analysis ran with; they are part of the
+	// fingerprint, so a changed limit never reuses an older result.
+	Limits Limits `json:"limits"`
+}
+
+// Limits are the counter limits an analyzer runs with, so that no input,
+// however large, makes one analysis take the server. Reaching one never
+// fails the analysis: the budget goes to pairs in canonical order, and the
+// paths it does not reach are Unknown with ReasonAnalysisLimit, so the same
+// input always loses the same paths, however the work was scheduled. Every
+// limit must be positive; the values come from measurement on a reference
+// machine. Time is not one of them: the time budget is ctx's deadline, and
+// running out fails the analysis, because where time runs out depends on
+// the machine.
+type Limits struct {
+	// Endpoints is the most endpoints of one analysis.
+	Endpoints int `json:"endpoints"`
+	// Rules is the most filter rules over every gate of one analysis.
+	Rules int `json:"rules"`
+	// PrefixesPerEndpoint is the most rule prefixes that may split one
+	// endpoint's placement classes.
+	PrefixesPerEndpoint int `json:"prefixesPerEndpoint"`
+	// PortRangesPerPair is the most port ranges the paths of one pair may
+	// cut the port space into.
+	PortRangesPerPair int `json:"portRangesPerPair"`
+	// Evaluations is the most chain evaluations of one analysis, each pair
+	// × port range × class pair counted once, and once more for each backend
+	// of a Service an expectation names.
+	Evaluations int `json:"evaluations"`
 }
 
 // Validate reports the first broken invariant of a, or nil: every path's

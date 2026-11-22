@@ -78,6 +78,10 @@ const (
 	// ScopeExpectation reaches the status of the expectation the Subject
 	// names, which becomes Unverifiable; no verdict changes.
 	ScopeExpectation ReasonScope = "expectation"
+	// ScopePaths reaches the paths the code's comment names.
+	ScopePaths ReasonScope = "paths"
+	// ScopeAnalysis reaches the whole analysis.
+	ScopeAnalysis ReasonScope = "analysis"
 )
 
 // ReasonSpec is one code's row of the reason table.
@@ -230,6 +234,16 @@ const (
 	// the canonical JSON of the digest cannot write exactly; the object is
 	// left out of the snapshot.
 	ReasonNumberTooLarge ReasonCode = "number-too-large"
+	// ReasonAnalysisLimit: one of the Limits was reached. The paths core
+	// could not compute within it, the last in canonical order, are Unknown.
+	// The Subject is the limit's JSON name and the Message the value the
+	// input needed.
+	ReasonAnalysisLimit ReasonCode = "analysis-limit"
+	// ReasonAnalysisTimeout: the analysis did not finish within its time
+	// budget. It is stored as AnalysisFailed, with no endpoints or paths,
+	// and tried again; it is never reported as clean. The Subject is the
+	// environment.
+	ReasonAnalysisTimeout ReasonCode = "analysis-timeout"
 )
 
 // Warning-level reasons.
@@ -378,6 +392,8 @@ var reasons = map[ReasonCode]ReasonSpec{
 	ReasonIPFamilyUnsupported:        row(LevelInput, ScopeSource, ProducerAdapter),
 	ReasonObjectInvalid:              row(LevelInput, ScopeNamespace, ProducerAdapter),
 	ReasonNumberTooLarge:             row(LevelInput, ScopeNamespace, ProducerRenderer, ProducerCloudCollector),
+	ReasonAnalysisLimit:              row(LevelInput, ScopePaths, ProducerCore),
+	ReasonAnalysisTimeout:            row(LevelInput, ScopeAnalysis, ProducerInputs),
 
 	ReasonSourceStale:            row(LevelWarning, ScopeNone, ProducerInputs),
 	ReasonContractVersionUnknown: row(LevelWarning, ScopeNone, ProducerInputs),
