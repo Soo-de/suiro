@@ -34,15 +34,9 @@ type Snapshot struct {
 	ContractVersion int    `json:"contractVersion"`
 	// Digest covers Objects and Problems, not Revision or read times, so a
 	// commit that leaves the rendered objects unchanged keeps the digest and
-	// triggers no new analysis. It is what ComputeDigest returns: the
-	// SHA-256 of the RFC 8785 (JSON Canonicalization Scheme) form of
-	// {"objects": Objects sorted by Key, "problems": Problems sorted by
-	// Reason then Subject}, built from those fields as their JSON tags
-	// write them, with every list of that envelope [] when empty. Each Body
-	// enters as the JSON value it holds, normalized by RFC 8785 alone and
-	// never further: an unwritten and an empty field can mean different
-	// things to Kubernetes. The server recomputes the digest of every
-	// snapshot it fetches and rejects a mismatch (ReasonDigestMismatch).
+	// triggers no new analysis. It is ComputeDigest's; the server
+	// recomputes it for every snapshot it fetches and rejects a mismatch
+	// (ReasonDigestMismatch).
 	Digest Digest `json:"digest"`
 	// ReadStartedAt and ReadFinishedAt bound the read. An AWS read is not
 	// atomic: objects changed during the read may be mixed, and the next
@@ -101,9 +95,15 @@ type Object struct {
 	Body json.RawMessage `json:"body"`
 }
 
-// ComputeDigest returns s's digest as Snapshot.Digest defines it, ignoring
-// s.Digest itself. It errors on a Body that is not valid JSON or that holds
-// a number beyond ±2^53.
+// ComputeDigest returns s's digest (see Snapshot.Digest), ignoring s.Digest
+// itself: the SHA-256 of the RFC 8785 (JSON Canonicalization Scheme) form
+// of {"objects": Objects sorted by Key, "problems": Problems in canonical
+// order (see the package comment)}, built from those fields as their JSON
+// tags write them, with every list of that envelope [] when empty. Each
+// Body enters as the JSON value it holds, normalized by RFC 8785 alone and
+// never further: an unwritten and an empty field can mean different things
+// to Kubernetes. It errors on a Body that is not valid JSON or that holds a
+// number beyond ±2^53.
 func ComputeDigest(s Snapshot) (Digest, error) {
 	panic("model: ComputeDigest is not implemented")
 }

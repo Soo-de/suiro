@@ -41,29 +41,8 @@ type Options struct {
 // end: the output does not depend on scheduling, and parallelism shortens
 // the time without changing what any limit counts.
 type Analyzer interface {
-	// Analyze computes one analysis:
-	//
-	//  1. translate each snapshot with the adapter of its kind and merge the
-	//     fragments (an ObjectKey from two sources: equal bodies warn,
-	//     different bodies make the scope of both sources Unknown, with one
-	//     model.ReasonConflictingResource problem per source);
-	//  2. merge the cluster profile (AWS-read values win over admin ones);
-	//  3. take each namespace's labels in the order model.Namespace gives,
-	//     and resolve selectors, Service targets, Security Group membership
-	//     and each endpoint's placement classes;
-	//  4. for every computed pair (see model.Analysis.Paths), every port
-	//     range that behaves alike and every class pair, evaluate each chain
-	//     step to Pass, Block or Undetermined, AND them (strong Kleene) into
-	//     the class outcome, combine class outcomes into the Verdict,
-	//     applying input-level reasons over everything else, and keep only
-	//     the path's summary;
-	//  5. compare with b.Before by class pair outcomes into Changes, from
-	//     the stored summaries alone (see model.Change);
-	//  6. evaluate b.Rules and the required expectations of the fragments
-	//     (each source's, at the revision its snapshot read) into Findings,
-	//     marking New as model.Finding.New defines.
-	//
-	// Status is AnalysisDone, or AnalysisPartial when an input- or
+	// Analyze computes the analysis of b in the steps the package comment
+	// lists. Status is AnalysisDone, or AnalysisPartial when an input- or
 	// partial-level reason holds, a reached limit included (see
 	// model.Limits). The result passes model.Analysis.Validate. Analyze
 	// returns an error only when it cannot run at all (a Bundle of another

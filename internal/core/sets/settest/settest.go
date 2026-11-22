@@ -18,8 +18,8 @@ import (
 )
 
 // Laws checks s against the contract of package sets, one subtest per law
-// group, for port sets and address sets alike. It uses s from the calling
-// goroutine only.
+// group, for port sets and address sets alike. It never uses s
+// concurrently, as sets.Space requires.
 func Laws(t *testing.T, s sets.Space) {
 	t.Run("ports", func(t *testing.T) {
 		g := portSets(s)

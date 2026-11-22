@@ -3,8 +3,8 @@ package model
 import "slices"
 
 // ReasonCode names why something was not judged normally. Every warning,
-// Undetermined step and Unknown verdict carries one. Codes travel as strings on every
-// wire, so a new code needs no proto change.
+// Undetermined step and Unknown verdict carries one. Codes travel as
+// strings on every wire, so a new code needs no proto change.
 type ReasonCode string
 
 // ReasonLevel is what a reason does to verdicts.
@@ -275,9 +275,7 @@ const (
 	// Evaluations.
 	ReasonAnalysisLimit ReasonCode = "analysis-limit"
 	// ReasonAnalysisTimeout: the analysis did not finish within its time
-	// budget. It is stored as AnalysisFailed, with no endpoints or paths,
-	// and tried again; it is never reported as clean. The Subject is the
-	// environment.
+	// budget, so it is AnalysisFailed. The Subject is the environment.
 	ReasonAnalysisTimeout ReasonCode = "analysis-timeout"
 )
 
