@@ -177,9 +177,9 @@ const (
 	// ClassUnknown and an Undetermined endpoint step, as for
 	// ReasonPlacementUnknown.
 	ReasonNoPlacement ReasonCode = "no-placement"
-	// ReasonAWSReadStale: the aws read the Bundle uses, not the newest one
-	// (for a pull request, that of the baseline in force; see
-	// Bundle.Snapshots), finished longer ago than the configured limit; AWS
+	// ReasonAWSReadStale: the last complete aws read that returned the
+	// digest the Bundle uses (for a pull request, that of the baseline in
+	// force; see Bundle.Snapshots) is older than the configured limit; AWS
 	// steps are Undetermined.
 	ReasonAWSReadStale ReasonCode = "aws-read-stale"
 	// ReasonPodAddressesUnknown: ClusterProfile.PodCIDRs is unknown, so a
