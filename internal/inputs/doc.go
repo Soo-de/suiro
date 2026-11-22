@@ -5,9 +5,8 @@
 // one, stores reads, assembles a model.Bundle per baseline and per open
 // pull request, and calls core.Analyzer. The environment whose registration
 // sets cluster gets one more source, "cluster/<environment>", read by
-// cloud-collector; like the AWS source it raises a stale-read reason
-// (model.ReasonClusterReadStale) once its last complete read is older than
-// the configured limit.
+// cloud-collector; it raises model.ReasonClusterReadStale once its last
+// complete read is older than the configured limit.
 //
 // It recomputes the digest of every snapshot it fetches with
 // model.ComputeDigest and rejects one that does not match, keeping the
@@ -30,7 +29,10 @@
 // accepted by analyzing the baseline on it first: pull requests move to
 // that read only once that baseline is in force, so their Changes never
 // show an AWS change they did not make. The baseline's own Changes show
-// what the new read changed.
+// what the new read changed. Staleness follows the read a Bundle uses
+// (model.ReasonAWSReadStale): a pull request kept on an older read while
+// baselines on a newer one fail reports it once that read passes the age
+// limit.
 //
 // A Before made with another model.SchemaVersion or model.AlgorithmVersion,
 // or, for a pull request, resting on another aws read than the Bundle's, is
