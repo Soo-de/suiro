@@ -370,8 +370,8 @@ type NamedNetwork struct {
 
 // SpecialPurposeIPv4 returns, sorted, the IPv4 blocks that are never the
 // internet: the blocks the IANA IPv4 Special-Purpose Address Registry marks
-// not globally reachable, and multicast. ClusterProfile.NotInternet extends
-// it per environment.
+// not globally reachable, less the blocks inside them it marks reachable,
+// and multicast. ClusterProfile.NotInternet extends it per environment.
 func SpecialPurposeIPv4() []netip.Prefix { return slices.Clone(specialPurposeIPv4) }
 
 var specialPurposeIPv4 = prefixes(
@@ -386,6 +386,7 @@ var specialPurposeIPv4 = prefixes(
 	"192.0.0.0/29", "192.0.0.8/32", "192.0.0.11/32", "192.0.0.12/30",
 	"192.0.0.16/28", "192.0.0.32/27", "192.0.0.64/26", "192.0.0.128/25",
 	"192.0.2.0/24",    // documentation
+	"192.88.99.2/32",  // 6a44 relay anycast
 	"192.168.0.0/16",  // private use
 	"198.18.0.0/15",   // benchmarking
 	"198.51.100.0/24", // documentation
