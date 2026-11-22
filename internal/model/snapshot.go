@@ -138,8 +138,8 @@ type Origin struct {
 // what it does to verdicts (see ReasonLevels).
 type Problem struct {
 	Reason ReasonCode `json:"reason"`
-	// Subject is what the problem is about: an ObjectKey, SourceID,
-	// EndpointKey, GateID or file path.
+	// Subject is what the problem is about, named as ReasonCode says for
+	// its Reason.
 	Subject string `json:"subject"`
 	// Message is detail for people. It never quotes a field outside
 	// KeptFields, so it cannot carry a Secret value into a log. The text is
