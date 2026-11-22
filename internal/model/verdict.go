@@ -310,10 +310,11 @@ type GateRef struct {
 	// Redacted means a ScopeFilter removed content the caller may not see.
 	// This is the one definition of redaction, applied per member: a member
 	// whose owner one of the caller's scopes matches stays whole; for every
-	// other member, its rules leave GateResult.Rules, and a Kubernetes
-	// member also leaves Members while an AWS member keeps its ID there (a
-	// resource ID). Layer, Type, Direction, Owners, the step's Outcome and
-	// Reason always stay, as do the path's key and ports.
+	// other member, its rules leave GateResult.Rules and its Service ports
+	// GateResult.Mappings, and a Kubernetes member also leaves Members while
+	// an AWS member keeps its ID there (a resource ID). Layer, Type,
+	// Direction, Owners, the step's Outcome and Reason always stay, as do
+	// the path's key and ports.
 	Redacted bool `json:"redacted,omitempty"`
 }
 
@@ -329,8 +330,8 @@ type GateResult struct {
 	// Reason is set when Outcome is Undetermined.
 	Reason ReasonCode `json:"reason,omitempty"`
 	// Mappings is set on a Service step: the Service ports that lead to the
-	// path's port, so a reader sees 80→8080.
-	Mappings []PortMapping `json:"mappings,omitempty"`
+	// path's port, each with its Service, so a reader sees 80→8080.
+	Mappings []MappingRef `json:"mappings,omitempty"`
 	// TranslatedTo is set on an SNAT step: the addresses and Security Groups
 	// the source takes from there on (its node's, or the NAT gateway's).
 	// Every later step judges the source by them, so workloads behind the
@@ -344,6 +345,15 @@ type RuleRef struct {
 	// Return marks a rule a stateless filter applied to the replies.
 	Return bool   `json:"return,omitempty"`
 	Origin Origin `json:"origin"`
+}
+
+// MappingRef is one Service port of a Service step. A step joins every
+// Service that selects the destination, so Gate tells apart two of them
+// with the same port.
+type MappingRef struct {
+	// Gate is the Service's GateID, one of the step's Members.
+	Gate    GateID      `json:"gate"`
+	Mapping PortMapping `json:"mapping"`
 }
 
 // Unexamined names what no analysis looks at, listed with every result so
