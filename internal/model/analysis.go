@@ -97,34 +97,19 @@ type Bundle struct {
 	// not satisfied. Like every stored analysis it holds path summaries
 	// only, which is all the comparison reads (see Change and Finding.New).
 	Before *Analysis `json:"before,omitempty"`
-	// Fingerprint identifies what the Bundle yields. inputs skips the
-	// analysis when the latest analysis of the same baseline or pull request
-	// has this fingerprint and a finished status (see package inputs). It is
-	// what ComputeFingerprint returns: the SHA-256 of the RFC 8785 canonical
-	// JSON of every other field of the Bundle, built from the fields as
-	// stated here rather than from the Go struct's encoding, lists in the
-	// order stated above and [] when empty, plus the Limits the analyzer
-	// runs with, with these reductions:
-	//   - PullRequest keeps only RepoURL and Number, so a new commit that
-	//     changes no input reuses the stored analysis;
-	//   - each snapshot keeps only its Key and Digest, which covers its
-	//     objects and problems;
-	//   - each problem keeps only Reason and Subject, so detail text that
-	//     differs between attempts forces no new analysis;
-	//   - Rules keeps only Version, which names its content;
-	//   - for a pull request, Before keeps only its Fingerprint, empty when
-	//     Before is nil; a baseline leaves Before out, because its Before is
-	//     the latest baseline, the very analysis the skip compares it with.
-	//
-	// So two Bundles with the same fingerprint give the same endpoints,
-	// paths and findings, and for a pull request the same Changes too; a
-	// baseline's Base, Changes and the New mark of its findings follow its
-	// own Before. Kind, Environment and the pull request's identity are part
-	// of it, so a baseline never shares a fingerprint with a pull request
-	// analysis, nor one pull request with another, however alike their
-	// inputs. SchemaVersion and AlgorithmVersion are part of it, so a build
-	// that changes either never reuses an older result. A field added to
-	// Bundle is added to the fingerprint.
+	// Fingerprint identifies what the Bundle yields: ComputeFingerprint of
+	// the Bundle under the analyzer's Limits. inputs skips the analysis when
+	// the latest analysis of the same baseline or pull request has this
+	// fingerprint and a finished status (see package inputs). Two Bundles
+	// with the same fingerprint give the same endpoints, paths and findings,
+	// and for a pull request the same Changes too; a baseline's Base,
+	// Changes and the New mark of its findings follow its own Before. Kind,
+	// Environment and the pull request's identity are part of it, so a
+	// baseline never shares a fingerprint with a pull request analysis, nor
+	// one pull request with another, however alike their inputs; so are
+	// SchemaVersion and AlgorithmVersion, so a build that changes either
+	// never reuses an older result. A new commit that changes no input, or
+	// problem text that differs between attempts, forces no new analysis.
 	Fingerprint Digest `json:"fingerprint"`
 	ToolVersion string `json:"toolVersion"`
 	// SchemaVersion and AlgorithmVersion are the build's (see
@@ -135,9 +120,23 @@ type Bundle struct {
 	AlgorithmVersion int `json:"algorithmVersion"`
 }
 
-// ComputeFingerprint returns the fingerprint of b analyzed under l, as
-// Bundle.Fingerprint defines it, ignoring b.Fingerprint itself. It errors
-// where ComputeDigest does.
+// ComputeFingerprint returns the fingerprint of b analyzed under l (see
+// Bundle.Fingerprint), ignoring b.Fingerprint itself: the SHA-256 of the
+// RFC 8785 canonical JSON of every other field of b plus l, built from the
+// fields as Bundle states them rather than from the Go struct's encoding,
+// lists in the order stated there and [] when empty, with these
+// reductions:
+//   - PullRequest keeps only RepoURL and Number;
+//   - each snapshot keeps only its Key and Digest, which covers its
+//     objects and problems;
+//   - each problem keeps only Reason and Subject;
+//   - Rules keeps only Version, which names its content;
+//   - for a pull request, Before keeps only its Fingerprint, empty when
+//     Before is nil; a baseline leaves Before out, because its Before is
+//     the latest baseline, the very analysis the skip compares it with.
+//
+// A field added to Bundle is added here. It errors where ComputeDigest
+// does.
 func ComputeFingerprint(b Bundle, l Limits) (Digest, error) {
 	panic("model: ComputeFingerprint is not implemented")
 }
