@@ -72,13 +72,14 @@ type Bundle struct {
 	// key and of the target branch key. Each list is sorted and without
 	// repeats.
 	UsedNamespaces map[SourceID][]string `json:"usedNamespaces,omitempty"`
-	// Problems are what inputs found before analysis, each with a SourceID
-	// as Subject: no complete read yet (ReasonSourceUnread), a read older
-	// than the last attempt (ReasonSourceStale), an ignored snapshot
-	// (ReasonContractVersionUnknown, ReasonDigestMismatch), a reason code
-	// this build does not know (ReasonCodeUnknown), a Before it could not
-	// analyze again (ReasonBeforeOutdated). Sorted by Reason, then
-	// Subject.
+	// Problems are what inputs found before analysis: no complete read yet
+	// (ReasonSourceUnread), a read older than the last attempt
+	// (ReasonSourceStale), an ignored snapshot (ReasonContractVersionUnknown,
+	// ReasonDigestMismatch), a reason code this build does not know
+	// (ReasonCodeUnknown), a Before it could not analyze again
+	// (ReasonBeforeOutdated). The Subject is the SourceID each is about,
+	// except for ReasonBeforeOutdated, whose Subject is Before's ID. Sorted
+	// by Reason, then Subject.
 	Problems []Problem `json:"problems,omitempty"`
 	// Profile is the admin-entered cluster profile of Environment, as store
 	// keeps it; values the aws snapshot reveals take precedence.

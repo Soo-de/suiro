@@ -161,12 +161,16 @@ const (
 	// subnets and groups than their nodes; their AWS steps are
 	// Undetermined.
 	ReasonCustomNetworking ReasonCode = "custom-networking"
-	// ReasonPlacementUnknown: where pods run cannot be told (node groups
-	// unknown, nodeName set, constraints on fields the model lacks); their
-	// AWS steps are Undetermined.
+	// ReasonPlacementUnknown: with an AWS layer, where a workload's pods run
+	// cannot be told (node groups unknown, nodeName set, constraints on
+	// fields the model lacks). The workload has the single class
+	// ClassUnknown: core judges its Kubernetes steps as usual and adds one
+	// Undetermined endpoint step in place of the AWS steps it cannot place.
 	ReasonPlacementUnknown ReasonCode = "placement-unknown"
-	// ReasonNoPlacement: the workload's constraints match no node group, so
-	// its pods would never run; core adds an Undetermined endpoint step.
+	// ReasonNoPlacement: with an AWS layer, the workload's constraints match
+	// no node group, so its pods would never run; it has the single class
+	// ClassUnknown and an Undetermined endpoint step, as for
+	// ReasonPlacementUnknown.
 	ReasonNoPlacement ReasonCode = "no-placement"
 	// ReasonAWSReadStale: the last complete AWS read is older than the
 	// configured limit; AWS steps are Undetermined.
@@ -177,8 +181,9 @@ const (
 	// ClusterProfile.IPBlockAppliesToPods is off.
 	ReasonPodAddressesUnknown ReasonCode = "pod-addresses-unknown"
 	// ReasonIPBlockPodMatchUnknown: ClusterProfile.IPBlockAppliesToPods is
-	// unknown; matching an ipBlock peer that overlaps the pod CIDRs against
-	// a pod endpoint is Undetermined.
+	// unknown; matching an ipBlock peer whose addresses (its cidr less its
+	// except blocks) overlap the pod CIDRs against a pod endpoint is
+	// Undetermined.
 	ReasonIPBlockPodMatchUnknown ReasonCode = "ipblock-pod-match-unknown"
 	// ReasonSNATUnknown: ClusterProfile.ExternalSNAT is unknown, so whether
 	// pod traffic leaving the VPC takes its node's address cannot be told;
@@ -201,10 +206,11 @@ const (
 	ReasonWorkloadKindUnsupported ReasonCode = "workload-kind-unsupported"
 )
 
-// Input-level reasons. Their Subject is a SourceID, the source whose scope
-// they cover, except for the ScopeNamespace codes, whose Subject is the
-// ObjectKey of the object; a problem that involves several sources is
-// raised once for each.
+// Input-level reasons. The Subject is the SourceID whose scope the problem
+// covers, and a problem that involves several sources is raised once for
+// each; ReasonObjectInvalid instead names the object's ObjectKey
+// (ScopeNamespace), and ReasonAnalysisLimit and ReasonAnalysisTimeout name
+// theirs in their own comments.
 const (
 	ReasonRenderFailed  ReasonCode = "render-failed"
 	ReasonRenderTimeout ReasonCode = "render-timeout"
@@ -342,7 +348,7 @@ const (
 	// ReasonBeforeOutdated: Before was made with another SchemaVersion or
 	// AlgorithmVersion, or rests on another aws read than the pull request
 	// it is compared with, and could not be analyzed again, so the analysis
-	// reports no Changes (see Bundle.Before).
+	// reports no Changes (see Bundle.Before). The Subject is Before's ID.
 	ReasonBeforeOutdated ReasonCode = "before-outdated"
 	// ReasonServicePortUnresolved: an expectation names a port of an
 	// existing Service that cannot be translated: the Service has no such
@@ -410,7 +416,7 @@ var reasons = map[ReasonCode]ReasonSpec{
 	ReasonPodSecurityGroups:        row(LevelGate, ScopeStep, ProducerAdapter, ProducerCore),
 	ReasonNodeSecurityGroupsMixed:  row(LevelGate, ScopeStep, ProducerAdapter, ProducerCore),
 	ReasonCustomNetworking:         row(LevelGate, ScopeStep, ProducerAdapter, ProducerCore),
-	ReasonPlacementUnknown:         row(LevelGate, ScopeStep, ProducerCore),
+	ReasonPlacementUnknown:         row(LevelGate, ScopeEndpoint, ProducerCore),
 	ReasonNoPlacement:              row(LevelGate, ScopeEndpoint, ProducerCore),
 	ReasonAWSReadStale:             row(LevelGate, ScopeStep, ProducerInputs),
 	ReasonPodAddressesUnknown:      row(LevelGate, ScopeStep, ProducerCore),

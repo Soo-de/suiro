@@ -56,9 +56,9 @@ type EndpointKey string
 
 const (
 	// EndpointInternet is the public IPv4 space: every address outside
-	// SpecialPurposeIPv4, ClusterProfile.NotInternet and the VPCs. A
-	// private source address cannot arrive through an internet gateway, so
-	// private ranges are never the internet.
+	// SpecialPurposeIPv4, ClusterProfile.NotInternet, ClusterProfile.PodCIDRs
+	// and the VPCs. A private source address cannot arrive through an
+	// internet gateway, so private ranges are never the internet.
 	EndpointInternet EndpointKey = "internet"
 	// EndpointExternalPrivate is every private address outside the cluster
 	// and the VPCs that no ClusterProfile.PrivateNetworks entry names: the
@@ -103,15 +103,13 @@ type Endpoint struct {
 	// package comment): for a workload one per (node group, subnet, address
 	// part) its constraints allow, for an AWS resource one per interface,
 	// for the internet and the external private and link-local networks
-	// one per address part.
-	// In an environment without an AWS layer
-	// a workload has the single class ClassCluster, whose Addresses are
+	// one per address part. In an environment without an AWS layer a
+	// workload has the single class ClassCluster, whose Addresses are
 	// ClusterProfile.PodCIDRs (none when unknown): node and subnet change no
-	// verdict there. There is always at least one, so no path rests on zero class pairs:
-	// a workload whose constraints match no node group, or whose placement
-	// cannot be told, has the single class ClassUnknown, and core adds an
-	// Undetermined endpoint step to its paths (ReasonNoPlacement,
-	// ReasonPlacementUnknown).
+	// verdict there. There is always at least one class, so no path rests
+	// on zero class pairs: with an AWS layer, a workload whose constraints
+	// match no node group, or whose placement cannot be told, has the single
+	// class ClassUnknown (ReasonNoPlacement, ReasonPlacementUnknown).
 	Classes []PlacementClass `json:"classes"`
 	Source  SourceID         `json:"source,omitempty"`
 	Object  ObjectKey        `json:"object,omitempty"`
@@ -157,7 +155,8 @@ type PlacementClass struct {
 
 const (
 	// ClassUnknown is the Name of the one class of a workload whose
-	// placement cannot be told or matches no node group.
+	// placement cannot be told or matches no node group; it occurs only
+	// with an AWS layer.
 	ClassUnknown = "unknown"
 	// ClassCluster is the Name of the one class of a workload in an
 	// environment without an AWS layer.
