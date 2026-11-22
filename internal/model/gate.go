@@ -233,8 +233,9 @@ type PortMapping struct {
 }
 
 // Fragment is what one adapter makes of one snapshot. Selectors stay
-// unresolved: a NetworkPolicy may select pods another source declares, so
-// core resolves them only after merging every fragment of the analysis.
+// unresolved: a NetworkPolicy may select pods of another source's
+// workloads, so core resolves them only after merging every fragment of the
+// analysis.
 type Fragment struct {
 	Source     SourceID    `json:"source"`
 	Workloads  []Workload  `json:"workloads,omitempty"`

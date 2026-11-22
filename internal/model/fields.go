@@ -85,7 +85,8 @@ var kubeIdentityFields = []FieldPath{
 // RequesterId) and ARNs, which carry account IDs.
 //
 // The AWS kinds with an entry are also exactly what cloud-collector reads;
-// an AWS kind without one is not read at all. A Kubernetes kind without one
+// an AWS kind without one is not read at all. From the cluster it reads
+// Namespace objects alone. A Kubernetes kind without one
 // keeps KubeIdentityFields and, when its body has
 // spec.template.spec.containers, the pod template fields a Deployment keeps,
 // so an adapter can tell a custom kind that creates pods

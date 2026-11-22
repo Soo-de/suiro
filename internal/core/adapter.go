@@ -15,7 +15,7 @@ import (
 // FilterSemantics describe how they decide (an isolating, additive, stateful
 // NetworkPolicy; a stateful Security Group; an ordered, stateless Network
 // ACL) and leaves selectors unresolved. Core applies the semantics, because
-// a policy can select pods that another source declares. What it does
+// a policy can select pods of another source's workloads. What it does
 // restate follows the platform: a default the platform's API fixes is
 // written out (an omitted protocol becomes TCP), an unwritten field that
 // means "every" becomes the explicit form (model.Peer.All, model.AllPorts),

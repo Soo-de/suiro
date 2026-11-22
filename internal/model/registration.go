@@ -18,6 +18,7 @@ const (
 //	environments:
 //	  - name: prod
 //	    aws: {region: eu-central-1, vpcID: vpc-0abc, clusterName: prod}
+//	    cluster: {}
 //	applications:
 //	  - name: payments-api
 //	    team: payments
@@ -31,10 +32,11 @@ const (
 //	    destination: {namespace: payments}
 //
 // Validation, on load and in the platform repository's CI: apiVersion and
-// kind as above; environment names unique; every application's
-// environment declared; "<team>/<name>" unique; team, name, repoURL,
-// targetRevision, render and destination.namespace present; helm set only
-// with render helm; paths relative, without "..". An invalid file is
+// kind as above; environment names unique; at most one environment with
+// cluster set; every application's environment declared; "<team>/<name>"
+// unique; team, name, repoURL, targetRevision, render and
+// destination.namespace present; helm set only with render helm; paths
+// relative, without "..". An invalid file is
 // rejected whole and the previous one stays in force. Two applications on
 // the same repoURL and path, or the same namespace, are valid but raise
 // ReasonRegistrationOverlap.
@@ -53,6 +55,11 @@ type EnvironmentSpec struct {
 	// without an AWS layer, whose results list UnexaminedAWSLayer and whose
 	// workloads each have the single class ClassCluster.
 	AWS *AWSSource `json:"aws,omitempty"`
+	// Cluster is set on the environment of the cluster cloud-collector runs
+	// in, with or without AWS: inputs then adds the source
+	// "cluster/<name>", whose namespace labels the analysis uses (see
+	// Namespace).
+	Cluster *ClusterSource `json:"cluster,omitempty"`
 }
 
 // ApplicationSpec registers one application: a repository path deployed to

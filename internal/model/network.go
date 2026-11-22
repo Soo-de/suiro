@@ -129,9 +129,21 @@ type PodAffinityTerm struct {
 }
 
 // Namespace is a Kubernetes namespace and the labels namespaceSelectors
-// match. A namespace no source declares still has the automatic
-// kubernetes.io/metadata.name label; any other label on it is unknown
-// (ReasonNamespaceUnresolved).
+// match. A source declares a namespace when it holds a Namespace object for
+// it; an object uses a namespace when its metadata.namespace names it.
+//
+// A namespace's labels come from the first of these that has it:
+//  1. a Namespace object a git source declares, at the revision the
+//     analysis reads that source, so a pull request's change counts; it
+//     wins over the cluster, which shows the state before deployment;
+//  2. the live read of the cluster (a SourceCluster snapshot);
+//  3. ClusterProfile.NamespaceLabels, entered by an admin.
+//
+// Two git sources that declare one namespace with different labels make its
+// labels unknown (ReasonNamespaceLabelsConflict); equal labels are no
+// conflict. The automatic kubernetes.io/metadata.name label is always
+// known; a namespace none of the three has has no other known label
+// (ReasonNamespaceLabelsUnknown).
 type Namespace struct {
 	Name   string            `json:"name"`
 	Labels map[string]string `json:"labels,omitempty"`
@@ -312,6 +324,11 @@ type ClusterProfile struct {
 	// office VPN, a peered network), each its own endpoint; the rest stays
 	// in EndpointExternalPrivate. Nil names none.
 	PrivateNetworks []PrivateNetwork `json:"privateNetworks,omitempty"`
+	// NamespaceLabels are labels an admin enters by namespace name, the last
+	// of the sources Namespace lists: used only for a namespace that no git
+	// source declares and the cluster read does not hold, as when the
+	// cluster cannot be read. Nil adds none.
+	NamespaceLabels map[string]map[string]string `json:"namespaceLabels,omitempty"`
 	// Sources names, per JSON field name above, where its value came from.
 	// It is set in the merged profile an analysis assumed
 	// (Analysis.Profile); in an admin-entered profile every value is the

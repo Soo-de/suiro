@@ -4,8 +4,9 @@ import "time"
 
 // SourceID names one input source and stays the same across reads. An
 // application source uses its registration's "<team>/<name>"; the AWS
-// network of an environment uses "aws/<environment>". Snapshots, reads and
-// origins refer back to their registration through it.
+// network of an environment uses "aws/<environment>", and its cluster
+// "cluster/<environment>". Snapshots, reads and origins refer back to their
+// registration through it.
 type SourceID string
 
 // SourceKind says which collector reads a source and which adapter
@@ -19,21 +20,31 @@ const (
 	// SourceAWS is the AWS network of one environment (a VPC and its EKS
 	// cluster), read live by cloud-collector.
 	SourceAWS SourceKind = "aws"
+	// SourceCluster is the live state of one environment's Kubernetes
+	// cluster, read by cloud-collector: Namespace objects only, through a
+	// ClusterRole that allows list and watch on namespaces and nothing
+	// else. Its snapshots are polled and go stale like an AWS source's.
+	SourceCluster SourceKind = "cluster"
 )
 
 // Source is what a collector needs to read one source. inputs derives it
 // from the registration file and sends the list in Collector.Watch; the
-// collector keeps it only in memory. Exactly one of Git and AWS is set,
-// matching Kind.
+// collector keeps it only in memory. Exactly one of Git, AWS and Cluster
+// is set, matching Kind.
 type Source struct {
 	ID          SourceID   `json:"id"`
 	Kind        SourceKind `json:"kind"`
 	Environment string     `json:"environment"`
 	// Owner is the registration's owner. It does not travel to collectors.
-	Owner Owner      `json:"owner"`
-	Git   *GitSource `json:"git,omitempty"`
-	AWS   *AWSSource `json:"aws,omitempty"`
+	Owner   Owner          `json:"owner"`
+	Git     *GitSource     `json:"git,omitempty"`
+	AWS     *AWSSource     `json:"aws,omitempty"`
+	Cluster *ClusterSource `json:"cluster,omitempty"`
 }
+
+// ClusterSource locates the cluster whose namespaces cloud-collector reads.
+// That is the cluster cloud-collector runs in, so it has no fields yet.
+type ClusterSource struct{}
 
 // GitSource locates an application's manifests, the way an Argo CD
 // Application does: repository, path, approved revision, renderer and

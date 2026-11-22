@@ -34,8 +34,9 @@ type Analyzer interface {
 	//     different bodies make the scope of both sources Unknown, with one
 	//     model.ReasonConflictingResource problem per source);
 	//  2. merge the cluster profile (AWS-read values win over admin ones);
-	//  3. resolve selectors, Service targets, Security Group membership and
-	//     each endpoint's placement classes;
+	//  3. take each namespace's labels in the order model.Namespace gives,
+	//     and resolve selectors, Service targets, Security Group membership
+	//     and each endpoint's placement classes;
 	//  4. for every computed pair (see model.Analysis.Paths), every port
 	//     range that behaves alike and every class pair, evaluate each chain
 	//     step to Pass, Block or Undetermined, AND them (strong Kleene) into

@@ -25,9 +25,9 @@ const (
 	//
 	// With ScopeSource the Subject is a SourceID. For an aws source the scope
 	// is every path that crosses an AWS gate. For a git source it is its
-	// destination namespace plus every namespace its objects declared
+	// destination namespace plus every namespace its objects used
 	// (metadata.namespace) in its latest usable reads, which inputs supplies
-	// in Bundle.DeclaredNamespaces; so it also covers a
+	// in Bundle.UsedNamespaces; so it also covers a
 	// ReasonConflictingResource object outside the destination namespaces. A
 	// namespace that the failing content writes into for the first time
 	// cannot be known: paths there keep the verdicts their gates give, and
@@ -111,9 +111,20 @@ const (
 	// Kubernetes steps of every pod in its namespace are Undetermined; for a
 	// cluster-scoped one, every Kubernetes step of the environment.
 	ReasonPolicyKindUnsupported ReasonCode = "policy-kind-unsupported"
-	// ReasonNamespaceUnresolved: a namespaceSelector depends on labels of a
-	// namespace no source declares; matching that peer is Undetermined.
-	ReasonNamespaceUnresolved ReasonCode = "namespace-unresolved"
+	// ReasonNamespaceLabelsUnknown: a namespaceSelector depends on labels of
+	// a namespace that no git source declares, the cluster read does not
+	// hold and the profile does not list (see Namespace); matching that
+	// peer is Undetermined.
+	ReasonNamespaceLabelsUnknown ReasonCode = "namespace-labels-unknown"
+	// ReasonNamespaceLabelsConflict: two git sources declare one namespace
+	// with different labels, so which apply after deployment cannot be
+	// told; matching a namespaceSelector against it is Undetermined. The
+	// Subject is the namespace.
+	ReasonNamespaceLabelsConflict ReasonCode = "namespace-labels-conflict"
+	// ReasonClusterReadStale: the last complete cluster read is older than
+	// the configured limit; matching a namespaceSelector against labels
+	// from that read is Undetermined.
+	ReasonClusterReadStale ReasonCode = "cluster-read-stale"
 	// ReasonServicePortMismatch: with the VPC CNI, a Service whose port
 	// differs from the container port makes NetworkPolicy enforcement on it
 	// unreliable.
@@ -261,8 +272,8 @@ const (
 	// ReasonDuplicateResource: two sources produce the same ObjectKey with
 	// equal content.
 	ReasonDuplicateResource ReasonCode = "duplicate-resource"
-	// ReasonNamespaceMismatch: an object declares a namespace other than its
-	// registration's destination; it is kept in the declared one.
+	// ReasonNamespaceMismatch: an object uses a namespace other than its
+	// registration's destination; it is kept in the one it uses.
 	ReasonNamespaceMismatch ReasonCode = "namespace-mismatch"
 	// ReasonRegistrationOverlap: two registrations read the same repository
 	// path or target the same namespace.
@@ -293,6 +304,10 @@ const (
 	// rejected is not checked. The Subject is the file's path for the whole
 	// file and the entry's ObjectKey for one entry.
 	ReasonExpectationsInvalid ReasonCode = "expectations-invalid"
+	// ReasonRegistrationNamespaceMissing: the cluster read has no namespace
+	// of a registration's destination, so the application may be deployed
+	// elsewhere than the analysis assumes.
+	ReasonRegistrationNamespaceMissing ReasonCode = "registration-namespace-missing"
 	// ReasonDigestMismatch: a fetched snapshot's Digest is not
 	// ComputeDigest of its content; it was rejected and the previous read
 	// kept.
@@ -359,7 +374,9 @@ var reasons = map[ReasonCode]ReasonSpec{
 	ReasonHostNetwork:              row(LevelGate, ScopeStep, ProducerAdapter),
 	ReasonStandalonePod:            row(LevelGate, ScopeEndpoint, ProducerAdapter),
 	ReasonPolicyKindUnsupported:    row(LevelGate, ScopeStep, ProducerAdapter),
-	ReasonNamespaceUnresolved:      row(LevelGate, ScopeStep, ProducerCore),
+	ReasonNamespaceLabelsUnknown:   row(LevelGate, ScopeStep, ProducerCore),
+	ReasonNamespaceLabelsConflict:  row(LevelGate, ScopeStep, ProducerCore),
+	ReasonClusterReadStale:         row(LevelGate, ScopeStep, ProducerInputs),
 	ReasonServicePortMismatch:      row(LevelGate, ScopeStep, ProducerCore),
 	ReasonRouteOutOfScope:          row(LevelGate, ScopeStep, ProducerCore),
 	ReasonRouteMiddlebox:           row(LevelGate, ScopeStep, ProducerCore),
@@ -395,22 +412,23 @@ var reasons = map[ReasonCode]ReasonSpec{
 	ReasonAnalysisLimit:              row(LevelInput, ScopePaths, ProducerCore),
 	ReasonAnalysisTimeout:            row(LevelInput, ScopeAnalysis, ProducerInputs),
 
-	ReasonSourceStale:            row(LevelWarning, ScopeNone, ProducerInputs),
-	ReasonContractVersionUnknown: row(LevelWarning, ScopeNone, ProducerInputs),
-	ReasonKindUnrecognized:       row(LevelWarning, ScopeNone, ProducerAdapter),
-	ReasonDuplicateResource:      row(LevelWarning, ScopeNone, ProducerCore),
-	ReasonNamespaceMismatch:      row(LevelWarning, ScopeNone, ProducerRenderer),
-	ReasonRegistrationOverlap:    row(LevelWarning, ScopeNone, ProducerInputs),
-	ReasonUnowned:                row(LevelWarning, ScopeNone, ProducerScope),
-	ReasonOwnershipConflict:      row(LevelWarning, ScopeNone, ProducerScope),
-	ReasonNamedPortUnresolved:    row(LevelWarning, ScopeNone, ProducerCore),
-	ReasonHostPort:               row(LevelWarning, ScopeNone, ProducerAdapter),
-	ReasonSymlinkSkipped:         row(LevelWarning, ScopeNone, ProducerGitCollector),
-	ReasonProfileConflict:        row(LevelWarning, ScopeNone, ProducerCore),
-	ReasonExpectationsInvalid:    row(LevelWarning, ScopeNone, ProducerRenderer, ProducerAdapter),
-	ReasonRuleOutsideModel:       row(LevelWarning, ScopeNone, ProducerAdapter),
-	ReasonServicePortUnresolved:  row(LevelWarning, ScopeExpectation, ProducerCore),
-	ReasonDigestMismatch:         row(LevelWarning, ScopeNone, ProducerInputs),
-	ReasonCodeUnknown:            row(LevelWarning, ScopeNone, ProducerInputs),
-	ReasonBeforeOutdated:         row(LevelWarning, ScopeNone, ProducerInputs),
+	ReasonSourceStale:                  row(LevelWarning, ScopeNone, ProducerInputs),
+	ReasonContractVersionUnknown:       row(LevelWarning, ScopeNone, ProducerInputs),
+	ReasonKindUnrecognized:             row(LevelWarning, ScopeNone, ProducerAdapter),
+	ReasonDuplicateResource:            row(LevelWarning, ScopeNone, ProducerCore),
+	ReasonNamespaceMismatch:            row(LevelWarning, ScopeNone, ProducerRenderer),
+	ReasonRegistrationOverlap:          row(LevelWarning, ScopeNone, ProducerInputs),
+	ReasonUnowned:                      row(LevelWarning, ScopeNone, ProducerScope),
+	ReasonOwnershipConflict:            row(LevelWarning, ScopeNone, ProducerScope),
+	ReasonNamedPortUnresolved:          row(LevelWarning, ScopeNone, ProducerCore),
+	ReasonHostPort:                     row(LevelWarning, ScopeNone, ProducerAdapter),
+	ReasonSymlinkSkipped:               row(LevelWarning, ScopeNone, ProducerGitCollector),
+	ReasonProfileConflict:              row(LevelWarning, ScopeNone, ProducerCore),
+	ReasonExpectationsInvalid:          row(LevelWarning, ScopeNone, ProducerRenderer, ProducerAdapter),
+	ReasonRuleOutsideModel:             row(LevelWarning, ScopeNone, ProducerAdapter),
+	ReasonServicePortUnresolved:        row(LevelWarning, ScopeExpectation, ProducerCore),
+	ReasonRegistrationNamespaceMissing: row(LevelWarning, ScopeNone, ProducerCore),
+	ReasonDigestMismatch:               row(LevelWarning, ScopeNone, ProducerInputs),
+	ReasonCodeUnknown:                  row(LevelWarning, ScopeNone, ProducerInputs),
+	ReasonBeforeOutdated:               row(LevelWarning, ScopeNone, ProducerInputs),
 }
