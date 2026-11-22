@@ -130,11 +130,24 @@ const (
 //	kind: Expectations
 //	expectations:
 //	  - name: api-reaches-db
-//	    sources: {endpoints: ["k8s:apps/Deployment/payments/api"]}
-//	    destinations: {endpoints: ["aws:database/orders-db"]}
+//	    sources: {workload: api}
+//	    destinations: {rds: orders-db}
 //	    ports: [{protocol: tcp, from: 5432, to: 5432}]
 //	    sourceQuantifier: all
 //	    destinationQuantifier: any
+//	  - name: web-reaches-payments
+//	    sources: {self: true}
+//	    destinations: {service: payments/payments}
+//	    ports: [{protocol: tcp, from: 80, to: 80}]
+//	    sourceQuantifier: all
+//	    destinationQuantifier: all
+//
+// Each side is written in its own platform's names, never in Suiro's
+// internal keys: this application's workloads as self or workload; another
+// Kubernetes workload as namespaces with labels, or as application; an AWS
+// resource as rds, arn or tags; the internet as internet. One side must be
+// this application's own workloads, and neither may be all, so no entry
+// can demand reaching everywhere.
 //
 // The file travels inside its source's snapshot: the renderer reads it from
 // the tree it renders and returns each entry as one KindExpectation object
@@ -144,20 +157,21 @@ const (
 // analysis takes the pull request's version for the sources of its own
 // repository and the target branch's version for every other source.
 //
-// A destination may name a Service instead ({service: payments} with ports
-// [{protocol: tcp, from: 80, to: 80}]): the ports are then the Service's,
+// A destination may name a Service: the ports are then the Service's,
 // which core translates for each workload behind it (see
 // ExpectationStatus).
 //
 // Validation: the renderer rejects the whole file when it does not parse,
 // has another apiVersion or kind, has more entries than the configured
-// limit, or has an entry without a name or two entries with the same name; the adapter rejects one entry whose sources
-// or destinations set no form, whose ports are missing or invalid, whose
-// quantifiers are not "all" or "any", or that names a service in its
-// sources or beside another destination form. Either raises
-// ReasonExpectationsInvalid, and what was rejected is not checked; it never
-// fails the render. An entry whose selectors pick nothing is valid and
-// becomes FindingUnmatched.
+// limit, or has an entry without a name or two entries with the same name.
+// The adapter rejects one entry whose sources or destinations set no form;
+// that uses all, endpoints or resourceKinds; whose sides both lack self and
+// workload; that sets labels without namespaces; whose ports are missing or
+// invalid; whose quantifiers are not "all" or "any"; or that names a
+// service in its sources or beside another destination form. Either raises
+// ReasonExpectationsInvalid with the entry's line, and what was rejected is
+// not checked; it never fails the render. An entry whose selectors pick
+// nothing is valid and becomes FindingUnmatched.
 type ExpectationsFile struct {
 	APIVersion   string            `json:"apiVersion"`
 	Kind         string            `json:"kind"`
@@ -166,7 +180,7 @@ type ExpectationsFile struct {
 
 // ExpectationSpec is one required path as its owner writes it. The adapter
 // turns it into an Expectation with ID "<SourceID>#<Name>", Kind
-// ExpectRequired and the entry's Origin.
+// ExpectRequired, Mode ModeWarn and the entry's Origin.
 type ExpectationSpec struct {
 	// Name is unique in the file.
 	Name                  string           `json:"name"`

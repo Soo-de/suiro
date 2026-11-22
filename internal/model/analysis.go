@@ -251,8 +251,11 @@ const (
 
 // EndpointSelector picks endpoints: the union of every listed form. Every
 // form must pick something: a form that picks nothing, such as an Endpoints
-// key the analysis does not have, makes the expectation a FindingUnmatched,
-// never a silently narrower or satisfied one.
+// key the analysis does not have or a workload renamed since, makes the
+// expectation a FindingUnmatched, never a silently narrower or satisfied
+// one. An expectations file names endpoints the way their own platform
+// does (see ExpectationsFile); All, ResourceKinds and Endpoints, which
+// reach everything or use internal keys, are for forbidden rules.
 type EndpointSelector struct {
 	// All picks every endpoint.
 	All bool `json:"all,omitempty"`
@@ -262,8 +265,22 @@ type EndpointSelector struct {
 	// Internet picks EndpointInternet.
 	Internet  bool          `json:"internet,omitempty"`
 	Endpoints []EndpointKey `json:"endpoints,omitempty"`
+	// Self picks every workload rendered from the expectation's own source
+	// (Expectation.Origin.Source).
+	Self bool `json:"self,omitempty"`
+	// Workload picks the workload of that name among the expectation's own
+	// source's workloads in the registration's namespace. WorkloadKind
+	// ("Deployment", "StatefulSet", ...) is needed only when two of them
+	// share the name.
+	Workload     string `json:"workload,omitempty"`
+	WorkloadKind string `json:"workloadKind,omitempty"`
+	// Application picks every workload of a registered application,
+	// "<team>/<name>" as the registrations file names it.
+	Application string `json:"application,omitempty"`
 	// Namespaces with Labels pick the workloads in those namespaces whose
-	// pod labels match; nil Labels picks every workload in them.
+	// pod labels match; nil Labels picks every workload in them. Labels
+	// apply only together with Namespaces. Labels outlive renames that
+	// names do not.
 	Namespaces []string       `json:"namespaces,omitempty"`
 	Labels     *LabelSelector `json:"labels,omitempty"`
 	// Service names a Kubernetes Service, "<namespace>/<name>", or in an
@@ -272,6 +289,14 @@ type EndpointSelector struct {
 	// then the Service's ports (see ExpectationStatus). It is allowed only
 	// in Destinations, and only alone in its selector.
 	Service string `json:"service,omitempty"`
+	// RDS picks the RDS database instance with this DB identifier.
+	RDS string `json:"rds,omitempty"`
+	// ARN picks the AWS resource the ARN names. Only its resource part is
+	// compared, since stored objects keep no ARNs or account IDs.
+	ARN string `json:"arn,omitempty"`
+	// Tags picks the AWS resources whose tags include every pair; only tags
+	// that KeptFields keeps can match.
+	Tags map[string]string `json:"tags,omitempty"`
 }
 
 // Expectation is a required or forbidden path set: the paths from Sources
