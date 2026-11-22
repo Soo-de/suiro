@@ -190,9 +190,8 @@ const (
 
 // ClassPair is one combination of a path's source and destination classes.
 // A SameNode pair is both ends on one node, where only NetworkPolicy
-// applies. It exists only with an AWS layer, for two workload classes of
-// the same NodeGroup and Subnet, when the workloads' placement constraints
-// let them share a node (Path.SameNode).
+// applies: two workload classes of the same NodeGroup and Subnet on a path
+// whose SameNode is set, so it exists only with an AWS layer.
 type ClassPair struct {
 	Source      PlacementClass `json:"source"`
 	Destination PlacementClass `json:"destination"`
@@ -247,8 +246,12 @@ type Path struct {
 	// Reasons are the reason codes behind an Unknown verdict or an
 	// Undetermined step, sorted and without repeats.
 	Reasons []ReasonCode `json:"reasons,omitempty"`
-	// SameNode says the two ends may share a node; it is the same on every
-	// path of the pair.
+	// SameNode says the two ends may share a node. It is set only with an
+	// AWS layer and two workload ends: when their placement constraints let
+	// them share a node, and on every such pair a limit cuts off (see
+	// Limits). Without an AWS layer both ends have the one class
+	// ClassCluster and it is never set. It is the same on every path of the
+	// pair.
 	SameNode bool `json:"sameNode,omitempty"`
 	// Outcomes holds the outcome of each class pair in pair order, one
 	// letter each: "P" Pass, "B" Block, "U" Undetermined. It is empty when
