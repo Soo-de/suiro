@@ -47,14 +47,20 @@ type Bundle struct {
 	Kind        AnalysisKind `json:"kind"`
 	Environment string       `json:"environment"`
 	// PullRequest is set for AnalysisPullRequest. Every source registered on
-	// its repository is read at its test merge commit; other sources at
-	// their target branch.
+	// its repository is read at its test merge commit, other git sources at
+	// their target branch, and the aws source as Snapshots says.
 	PullRequest *PullRequest `json:"pullRequest,omitempty"`
 	// Sources are every registered source of the environment, including
 	// those without a usable snapshot, so an input-level problem can be
 	// scoped to the source's namespaces (LevelInput). Sorted by ID.
 	Sources []Source `json:"sources"`
 	// Snapshots are the after side: at most one per source, sorted by Key.
+	// For a pull request the aws snapshot is the read Before rests on, so
+	// both sides share one AWS state and Changes show only what the pull
+	// request does; inputs moves pull requests to a new aws read only once
+	// a baseline on it is in force (see package inputs). Only when the read
+	// Before rests on can no longer be used does the Bundle hold another,
+	// and Before is then analyzed again (see Before).
 	Snapshots []Snapshot `json:"snapshots"`
 	// UsedNamespaces holds, for each git source, every namespace its
 	// objects used (metadata.namespace) in its latest usable reads, which an
@@ -81,13 +87,14 @@ type Bundle struct {
 	Rules RuleSet `json:"rules"`
 	// Before is the before side: for a pull request the baseline in force,
 	// for a baseline the previous one; nil on first install, when every path
-	// counts as new. Before made with another SchemaVersion or
-	// AlgorithmVersion is never compared: inputs analyzes that baseline
-	// again first, and when it cannot it raises ReasonBeforeOutdated, on
-	// which core leaves Changes empty and marks New, as with no before side,
-	// every finding that is not satisfied. Like every stored analysis it
-	// holds path summaries only, which is all the comparison reads (see
-	// Change and Finding.New).
+	// counts as new. Before is never compared when it was made with another
+	// SchemaVersion or AlgorithmVersion or, for a pull request, rests on
+	// another aws read than Snapshots holds: inputs first analyzes that
+	// baseline again, with this build and the Bundle's aws read, and when
+	// it cannot it raises ReasonBeforeOutdated, on which core leaves Changes
+	// empty and marks New, as with no before side, every finding that is
+	// not satisfied. Like every stored analysis it holds path summaries
+	// only, which is all the comparison reads (see Change and Finding.New).
 	Before *Analysis `json:"before,omitempty"`
 	// Fingerprint identifies what the Bundle yields. inputs skips the
 	// analysis when the latest analysis of the same baseline or pull request

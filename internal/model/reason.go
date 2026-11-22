@@ -322,7 +322,8 @@ const (
 	// code.
 	ReasonCodeUnknown ReasonCode = "reason-code-unknown"
 	// ReasonBeforeOutdated: Before was made with another SchemaVersion or
-	// AlgorithmVersion and could not be analyzed again, so the analysis
+	// AlgorithmVersion, or rests on another aws read than the pull request
+	// it is compared with, and could not be analyzed again, so the analysis
 	// reports no Changes (see Bundle.Before).
 	ReasonBeforeOutdated ReasonCode = "before-outdated"
 	// ReasonServicePortUnresolved: an expectation names a Service port that

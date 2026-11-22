@@ -25,8 +25,16 @@
 // returns to an earlier state is analyzed again, so its latest result
 // always matches its current inputs, and a failed analysis is retried.
 //
-// A Before made with another model.SchemaVersion or model.AlgorithmVersion
-// is analyzed again with this build before anything is compared with it;
-// when that fails, the Bundle carries model.ReasonBeforeOutdated (see
-// model.Bundle.Before).
+// Both sides of a pull request rest on one AWS state. A pull request's
+// Bundle takes the aws read of the baseline in force, and a new aws read is
+// accepted by analyzing the baseline on it first: pull requests move to
+// that read only once that baseline is in force, so their Changes never
+// show an AWS change they did not make. The baseline's own Changes show
+// what the new read changed.
+//
+// A Before made with another model.SchemaVersion or model.AlgorithmVersion,
+// or, for a pull request, resting on another aws read than the Bundle's, is
+// analyzed again with this build and the Bundle's aws read before anything
+// is compared with it; when that fails, the Bundle carries
+// model.ReasonBeforeOutdated (see model.Bundle.Before).
 package inputs
