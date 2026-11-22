@@ -11,10 +11,21 @@ import (
 // Bundle.
 var ErrNoPath = errors.New("core: no such path")
 
+// Options are the settings an Analyzer is built with. Limits live here and
+// not in the Bundle, so a pull request cannot raise them.
+type Options struct {
+	// Limits are the counter limits of every analysis; each must be
+	// positive. Analyze copies them into model.Analysis.Limits.
+	Limits model.Limits
+}
+
 // Analyzer is the engine's entry point. inputs calls it in the server for
 // every Bundle it does not skip (see package inputs); the CLI calls it in
 // process on a local directory. It performs no I/O: everything it reads is
-// in the Bundle.
+// in the Bundle. Pairs are independent, so it computes them in parallel, up
+// to GOMAXPROCS at a time, and sorts the result into canonical order at the
+// end: the output does not depend on scheduling, and parallelism shortens
+// the time without changing what any limit counts.
 type Analyzer interface {
 	// Analyze computes one analysis:
 	//
@@ -38,12 +49,14 @@ type Analyzer interface {
 	//     got worse.
 	//
 	// Status is AnalysisDone, or AnalysisPartial when an input- or
-	// partial-level reason holds. The result passes model.Analysis.Validate.
-	// Analyze returns an error only when it cannot run at all (a canceled
-	// ctx, no adapter for a snapshot kind, a fragment that fails
-	// model.Fragment.Validate, which is an adapter bug); unusable content
-	// becomes Undetermined steps and Unknown verdicts with reasons, never an
-	// error and never a clean result.
+	// partial-level reason holds, a reached limit included (see
+	// model.Limits). The result passes model.Analysis.Validate. Analyze
+	// returns an error only when it cannot run at all (a canceled ctx or
+	// one past its deadline, no adapter for a snapshot kind, a fragment that
+	// fails model.Fragment.Validate, which is an adapter bug); it then
+	// returns no partial result, and an error from ctx wraps ctx.Err().
+	// Unusable content becomes Undetermined steps and Unknown verdicts with
+	// reasons, never an error and never a clean result.
 	Analyze(ctx context.Context, b model.Bundle) (model.Analysis, error)
 
 	// Explain recomputes the path keyed k from b with the same steps

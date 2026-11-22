@@ -28,9 +28,12 @@ message RenderRequest {
 }
 
 // File is one repository file; path is relative and slash-separated.
+// truncated marks a binary or oversized file sent with empty content
+// (rpc.File).
 message File {
   string path = 1;
   bytes content = 2;
+  bool truncated = 3;
 }
 
 // RenderResponse is the job's outcome (rpc.RenderResult).
