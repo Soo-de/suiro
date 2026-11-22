@@ -2,14 +2,16 @@ package model
 
 import "net/netip"
 
-// Verdict is the four-valued result of one path. Over a path's class
-// results, of which there is always at least one, it is:
+// Verdict is the four-valued result of one path, read from the outcomes of
+// its class pairs (see Path), of which there is always at least one:
 //
-//	Unknown             an input-level reason covers the path
 //	Allow               every class pair Pass
 //	Deny                every class pair Block
 //	PlacementDependent  some class pair Pass and some Block
 //	Unknown             otherwise (some Undetermined, no Pass/Block split)
+//
+// A path an input-level reason covers is Unknown, since every one of its
+// class pairs is then Undetermined, whatever its gates say.
 //
 // Unknown is the path-level name of Undetermined, as Unverifiable is the
 // expectation-level one (see the package comment). Allow reads "every
@@ -83,10 +85,11 @@ type Endpoint struct {
 	Kind      EndpointKind `json:"kind"`
 	Name      string       `json:"name"`
 	Namespace string       `json:"namespace,omitempty"`
-	// Classes are the places the endpoint can be: for a workload one per
-	// (node group, subnet, address part) its constraints allow, for an AWS
-	// resource one per interface, for the internet and external private
-	// networks one per address part. In an environment without an AWS layer
+	// Classes are the places the endpoint can be, in class order (see the
+	// package comment): for a workload one per (node group, subnet, address
+	// part) its constraints allow, for an AWS resource one per interface,
+	// for the internet and external private networks one per address part.
+	// In an environment without an AWS layer
 	// a workload has the single class ClassCluster, whose Addresses are
 	// ClusterProfile.PodCIDRs (none when unknown): node and subnet change no
 	// verdict there. There is always at least one, so no path rests on zero class pairs:
@@ -101,14 +104,22 @@ type Endpoint struct {
 	Owner Owner `json:"owner,omitzero"`
 }
 
-// PlacementClass is one place an endpoint can be: node group, subnet,
-// Security Groups, and the part of the subnet's addresses it may hold.
+// PlacementClass is one place an endpoint can be. Its location (NodeGroup,
+// Subnet and Addresses) identifies it across analyses (see Change); its
+// Security Groups and PublicAddress are attributes of that place, never
+// part of its identity. No two classes of one endpoint share a location.
 //
-// An address part splits a class only when some rule on the path covers the
-// subnet partly (a /25 rule on a /24 subnet): which half a pod's address
-// falls in is as unknown before deployment as which node it lands on, so
-// it is placement too, and a split outcome makes the path
-// PlacementDependent.
+// Within one analysis a class is homogeneous: all of it meets every gate
+// alike, so one outcome holds for the whole class on each path. Core cuts
+// classes until that holds: by node group, by subnet, and by every prefix a
+// rule or route compares the endpoint's addresses with that covers a class
+// partly (a /25 rule on a /24 subnet). Which part a pod's address falls in
+// is as unknown before deployment as which node it lands on, so it is
+// placement too, and a split outcome makes the path PlacementDependent. A
+// difference no cut separates, nodes of one group that carry different
+// Security Groups, makes the steps it decides Undetermined
+// (ReasonNodeSecurityGroupsMixed); a limit that stops the cuts cuts off the
+// endpoint's pairs (see Limits).
 type PlacementClass struct {
 	// Name is a short label for people: "<node group>/<subnet>",
 	// "<interface>", "internet", "external-private", ClassCluster or
@@ -119,7 +130,8 @@ type PlacementClass struct {
 	SecurityGroups []string `json:"securityGroups,omitempty"`
 	// Addresses are the addresses this class may hold, a subset of the
 	// subnet's (for the internet and external private networks, of their
-	// address space; for ClassCluster, of the pod CIDRs).
+	// address space; for ClassCluster, of the pod CIDRs), as the fewest
+	// prefixes that cover them.
 	Addresses []netip.Prefix `json:"addresses"`
 	// PublicAddress says traffic from this class can carry a public address
 	// to an internet gateway: the node's (pods leave the VPC as the node)
@@ -137,8 +149,10 @@ const (
 )
 
 // ClassPair is one combination of a path's source and destination classes.
-// SameNode pairs exist only when both ends may share a node and the
-// environment has an AWS layer; between them only NetworkPolicy applies.
+// A SameNode pair is both ends on one node, where only NetworkPolicy
+// applies. It exists only with an AWS layer, for two workload classes of
+// the same NodeGroup and Subnet, when the workloads' placement constraints
+// let them share a node (Path.SameNode).
 type ClassPair struct {
 	Source      PlacementClass `json:"source"`
 	Destination PlacementClass `json:"destination"`
@@ -180,23 +194,34 @@ func ParsePathKey(s string) (PathKey, error) {
 // both protocols' port space; neighboring ranges with equal results are
 // merged. The chains behind it are not stored: core.Analyzer.Explain
 // recomputes them as a PathDetail from the same Bundle.
+//
+// The path's class pairs are every source class with every destination
+// class and, when SameNode is set, each pair of classes with the same
+// NodeGroup and Subnet once more as a SameNode pair, in pair order (see the
+// package comment), so the stored endpoints alone give them. A class pair's
+// outcome is the strong Kleene AND of its chain's steps, or Undetermined
+// when an input-level reason covers the path.
 type Path struct {
 	Key     PathKey `json:"key"`
 	Verdict Verdict `json:"verdict"`
 	// Reasons are the reason codes behind an Unknown verdict or an
 	// Undetermined step, sorted and without repeats.
 	Reasons []ReasonCode `json:"reasons,omitempty"`
-	// OpenPairs, ClosedPairs and UndeterminedPairs count the path's class
-	// pairs by outcome (Pass, Block, Undetermined). Their sum is never 0
-	// (see Endpoint.Classes).
-	OpenPairs         int `json:"openPairs"`
-	ClosedPairs       int `json:"closedPairs"`
-	UndeterminedPairs int `json:"undeterminedPairs"`
+	// SameNode says the two ends may share a node; it is the same on every
+	// path of the pair.
+	SameNode bool `json:"sameNode,omitempty"`
+	// Outcomes holds the outcome of each class pair in pair order, one
+	// letter each: "P" Pass, "B" Block, "U" Undetermined. It is empty when
+	// every class pair has the same outcome, the one Verdict names (Allow
+	// Pass, Deny Block, Unknown Undetermined). It is the only record of
+	// class outcomes: counts by outcome are derived from it, and Change
+	// compares it.
+	Outcomes string `json:"outcomes,omitempty"`
 }
 
 // PathDetail is one path with its chains. Its Key, Verdict and Reasons
-// equal those of the path's summary, and its Classes counted by outcome
-// equal the summary's counts.
+// equal those of the path's summary, and its Classes are the summary's
+// class pairs, in the same order and with the same outcomes.
 type PathDetail struct {
 	Key     PathKey      `json:"key"`
 	Verdict Verdict      `json:"verdict"`
@@ -209,8 +234,11 @@ type PathDetail struct {
 
 // ClassResult is the chain of one class pair.
 type ClassResult struct {
-	Pair    ClassPair `json:"pair"`
-	Outcome Outcome   `json:"outcome"`
+	Pair ClassPair `json:"pair"`
+	// Outcome is the class pair's outcome as Path defines it; under an
+	// input-level reason it is Undetermined while Gates still show what
+	// each step says.
+	Outcome Outcome `json:"outcome"`
 	// Gates is the chain in path order. Every step is evaluated, not only
 	// up to the first block, so a Deny lists every blocking step. A Service
 	// step (GateTransform) appears where a Service that selects the

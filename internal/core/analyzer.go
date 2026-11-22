@@ -53,11 +53,11 @@ type Analyzer interface {
 	//     the class outcome, combine class outcomes into the Verdict,
 	//     applying input-level reasons over everything else, and keep only
 	//     the path's summary;
-	//  5. compare with b.Before at class level into Changes;
+	//  5. compare with b.Before by class pair outcomes into Changes, from
+	//     the stored summaries alone (see model.Change);
 	//  6. evaluate b.Rules and the required expectations of the fragments
-	//     (each source's, at the revision its snapshot read) against both
-	//     sides' paths into Findings, marking a finding New when its status
-	//     got worse.
+	//     (each source's, at the revision its snapshot read) into Findings,
+	//     marking New as model.Finding.New defines.
 	//
 	// Status is AnalysisDone, or AnalysisPartial when an input- or
 	// partial-level reason holds, a reached limit included (see

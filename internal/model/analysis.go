@@ -85,9 +85,9 @@ type Bundle struct {
 	// AlgorithmVersion is never compared: inputs analyzes that baseline
 	// again first, and when it cannot it raises ReasonBeforeOutdated, on
 	// which core leaves Changes empty and marks New, as with no before side,
-	// every finding that is not satisfied. Core re-checks Rules against Before.Paths, so a rule
-	// added since Before reports what was already violated as existing,
-	// not new. Like every stored analysis it holds path summaries only.
+	// every finding that is not satisfied. Like every stored analysis it
+	// holds path summaries only, which is all the comparison reads (see
+	// Change and Finding.New).
 	Before *Analysis `json:"before,omitempty"`
 	// Fingerprint identifies what the Bundle yields. inputs skips the
 	// analysis when the latest analysis of the same baseline or pull request
@@ -206,27 +206,60 @@ type Limits struct {
 }
 
 // Validate reports the first broken invariant of a, or nil: every path's
-// class pair counts sum to at least one and agree with its Verdict and
-// Reasons as Verdict defines, and every list is in canonical order (see the
-// package comment).
+// Outcomes is empty or has one letter per class pair of the path, not all
+// the same, and agrees with its Verdict and Reasons as Verdict defines,
+// and every list is in canonical order (see the package comment).
 func (a Analysis) Validate() error {
 	panic("model: Analysis.Validate is not implemented")
 }
 
-// Change is one path whose verdict or set of passing class pairs differs
-// between the before and after sides. Opened and Closed compare at class
-// level: a class pair that passes after and did not before is opened (Δ+);
-// one that passed before and does not after is closed (Δ−). A change can
-// have both. Ports are cut where either side's paths are, so both sides
-// are compared over the same port ranges.
+// Change is one path whose verdict or class pair outcomes differ between
+// the before and after sides, or that has a class pair Undetermined on
+// both. Core computes it from the two stored summaries alone
+// (Endpoint.Classes and Path.Outcomes), never by analyzing a side again.
+// Ports are cut where either side's paths are, so both sides are compared
+// over the same port ranges.
+//
+// Classes are matched across the sides by location, never by
+// configuration: the before and after classes of one endpoint align where
+// their NodeGroup and Subnet are equal and their Addresses intersect, and
+// each aligned part keeps one outcome per side because every class is
+// homogeneous (see PlacementClass). ClassCluster aligns with ClassCluster,
+// and ClassUnknown with ClassUnknown, whole. Two class pairs align where
+// both ends align and SameNode is equal. A part only one side has is a
+// placement added or removed, and counts as Block on the side that lacks
+// it, since nothing passed there: an after-only pair that passes is
+// opened, a before-only pair that passed is closed. A location that has no
+// counterpart, such as a renamed node group or a replaced interface, is
+// removed on one side and added on the other, which can over-report a
+// change but never hide one.
+//
+// Each aligned pair goes by its before → after outcomes into one list, or
+// into none when both are Pass or both Block:
+//
+//	Opened          Block → Pass
+//	Closed          Pass → Block
+//	PossiblyOpened  Block → Undetermined, Undetermined → Pass
+//	PossiblyClosed  Pass → Undetermined, Undetermined → Block
+//	Undetermined    Undetermined → Undetermined
+//
+// A pair is listed with its aligned location (the addresses both sides
+// share, or one side's for a placement added or removed) and the other
+// attributes of the after side, or of the before side for a placement
+// removed.
 type Change struct {
 	Key PathKey `json:"key"`
 	// Before or After is empty when that side has no such path (an endpoint
-	// added or removed).
-	Before Verdict     `json:"before,omitempty"`
-	After  Verdict     `json:"after,omitempty"`
-	Opened []ClassPair `json:"opened,omitempty"`
-	Closed []ClassPair `json:"closed,omitempty"`
+	// added or removed), so every pair counts as added or removed.
+	Before         Verdict     `json:"before,omitempty"`
+	After          Verdict     `json:"after,omitempty"`
+	Opened         []ClassPair `json:"opened,omitempty"`
+	Closed         []ClassPair `json:"closed,omitempty"`
+	PossiblyOpened []ClassPair `json:"possiblyOpened,omitempty"`
+	PossiblyClosed []ClassPair `json:"possiblyClosed,omitempty"`
+	// Undetermined pairs may have changed either way, so they are never
+	// read as unchanged.
+	Undetermined []ClassPair `json:"undetermined,omitempty"`
 }
 
 // ExpectationKind is what an expectation demands.
@@ -452,13 +485,16 @@ type Finding struct {
 	// Status of a forbidden expectation's finding is that one path's
 	// status: the ExpectationStatus rule applied to the path alone.
 	Status ExpectationStatus `json:"status"`
-	// New means the status got worse than on the before side (satisfied →
-	// unverifiable → violated). For a forbidden expectation it is judged
-	// over ports cut where either side's paths are, as Changes cuts them:
-	// the finding is New when some piece of its path's port range within the
-	// expectation's Ports had a better status on the before side. Only new
-	// findings warn on a pull request; the rest are existing problems listed
-	// on the open issues page.
+	// New marks a finding the change made; only new findings warn on a pull
+	// request, and the rest are existing problems listed on the open issues
+	// page. A forbidden expectation's finding is New when its path's Change,
+	// within the rule's Ports (as translated, for a Service), opens a class
+	// pair in any way: Opened or PossiblyOpened, a placement added included.
+	// Changes do not depend on rules, so a rule added since Before reports
+	// what was already open as existing. Any other finding is New when its
+	// status is worse (satisfied → unverifiable → violated) than that of
+	// the before side's finding with the same Kind, Rule, Subject and
+	// Origin.Locator, a missing one counting as satisfied.
 	New bool `json:"new"`
 	// Mode is the rule's mode when the analysis ran (see RuleMode); empty
 	// for a hygiene finding, which only warns.
