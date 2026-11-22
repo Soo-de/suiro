@@ -130,8 +130,8 @@ const (
 // Rule is one filter rule. It matches a connection when some peer matches
 // the far end and some port matches the destination port. An empty list
 // never stands for "every": every far end is Peer{All: true} and every port
-// is AllPorts(), which the adapter writes when the source leaves the field
-// unwritten (a NetworkPolicy rule without "from" or without "ports"). A
+// is AllPorts(), which the adapter writes where the source field means
+// every (a NetworkPolicy rule's from, to or ports, unwritten or empty). A
 // rule with no Peers, or with neither Ports nor NamedPorts, is invalid
 // (Fragment.Validate); one whose every peer or port the adapter dropped as
 // outside the model is dropped whole (ReasonRuleOutsideModel).
@@ -156,7 +156,7 @@ type Rule struct {
 // adapters drop them.
 type Peer struct {
 	// All matches every far end: pods, interfaces and addresses alike. It is
-	// what an unwritten peer list means, which no prefix can say.
+	// what an unwritten or empty peer list means, which no prefix can say.
 	All    bool           `json:"all,omitempty"`
 	Prefix netip.Prefix   `json:"prefix,omitzero"`
 	Except []netip.Prefix `json:"except,omitempty"`

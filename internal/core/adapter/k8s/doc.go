@@ -15,9 +15,10 @@
 // which no cluster setting changes, from one table kept by Kubernetes
 // version: an omitted NetworkPolicy or Service port protocol is TCP, an
 // omitted policyTypes is Ingress plus Egress when egress rules are present.
-// An unwritten "from", "to" or "ports" becomes model.Peer.All or
-// model.AllPorts. An SCTP port or IPv6 ipBlock is dropped, and a rule left
-// with nothing in that list is dropped whole
+// A "from", "to" or "ports" that is unwritten or empty means every peer or
+// port, as Kubernetes defines it, and becomes model.Peer.All or
+// model.AllPorts. An SCTP port or IPv6 ipBlock is dropped, and only a rule
+// whose list that dropping emptied is dropped whole
 // (model.ReasonRuleOutsideModel). An object the API server would reject
 // raises model.ReasonObjectInvalid.
 package k8s
