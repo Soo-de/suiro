@@ -229,7 +229,8 @@ type Limits struct {
 // Validate reports the first broken invariant of a, or nil: every path's
 // Outcomes is empty or has one letter per class pair of the path, not all
 // the same, and agrees with its Verdict and Reasons as Verdict defines,
-// and every list is in canonical order (see the package comment).
+// and every list is in canonical order with no two entries tied, identical
+// problems aside (see the package comment).
 func (a Analysis) Validate() error {
 	panic("model: Analysis.Validate is not implemented")
 }
