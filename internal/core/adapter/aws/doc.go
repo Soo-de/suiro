@@ -4,7 +4,11 @@
 // rule lists per direction; route tables decide whether a path exists at
 // all. It also emits the topology (subnets, interfaces, NAT gateways), the
 // AWS-side endpoints, and the cluster profile values EKS reveals (node
-// groups, VPC CNI settings).
+// groups, VPC CNI settings). An RDS DB instance becomes a
+// model.ResourceDatabase endpoint named by its identifier, whose
+// interfaces are the RDS interfaces in its subnet group's subnets that
+// carry its VPC Security Groups; an interface that fits several instances
+// is a possible place of each.
 //
 // Protocol "-1" becomes model.ProtocolAll. IPv6 fields are not kept, so a
 // Security Group rule left with no IPv4 range, group or prefix list, a

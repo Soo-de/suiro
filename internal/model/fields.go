@@ -33,6 +33,7 @@ const (
 	KindNetworkInterface ObjectKind = "aws:ec2/NetworkInterface"
 	KindNATGateway       ObjectKind = "aws:ec2/NatGateway"
 	KindInstance         ObjectKind = "aws:ec2/Instance"
+	KindDBInstance       ObjectKind = "aws:rds/DBInstance"
 	KindEKSCluster       ObjectKind = "aws:eks/Cluster"
 	KindNodegroup        ObjectKind = "aws:eks/Nodegroup"
 	KindEKSAddon         ObjectKind = "aws:eks/Addon"
@@ -87,7 +88,8 @@ var kubeIdentityFields = []FieldPath{
 // What it leaves out on purpose: Secret and ConfigMap data, container env,
 // envFrom, command, args and images, annotations (they can hold anything,
 // last-applied-configuration included), rule descriptions, AWS tags other
-// than the node-group ones, account IDs (OwnerId, UserIdGroupPairs[].UserId,
+// than the node-group ones and those an admin chose to keep (see
+// ReduceBody), account IDs (OwnerId, UserIdGroupPairs[].UserId,
 // RequesterId) and ARNs, which carry account IDs.
 //
 // The AWS kinds with an entry are also exactly what cloud-collector reads;
@@ -106,12 +108,14 @@ func KeptFields(kind ObjectKind) ([]FieldPath, bool) {
 // ReduceBody returns raw, the JSON body of one object of kind, with only what
 // that kind keeps: KeptFields(kind) plus, for a Kubernetes kind,
 // KubeIdentityFields, with the further reductions FieldPath lists and the
-// rule KeptFields gives for a Kubernetes kind without an entry. It is the
-// one implementation of the whitelist: the renderer, cloud-collector and
-// test helpers all call it. It errors when raw is not a JSON object or kind
-// is an AWS kind without an entry, and with ErrNumberTooLarge when a kept
-// number is beyond ±2^53.
-func ReduceBody(kind ObjectKind, raw json.RawMessage) (json.RawMessage, error) {
+// rule KeptFields gives for a Kubernetes kind without an entry. For an EC2
+// or RDS instance it also keeps the tags whose key tagKeys holds
+// (Source.KeptTagKeys), as a "Tags[Key=value]" or "TagList[Key=value]" path
+// would; other kinds ignore tagKeys. It is the one implementation of the
+// whitelist: the renderer, cloud-collector and test helpers all call it.
+// It errors when raw is not a JSON object or kind is an AWS kind without an
+// entry, and with ErrNumberTooLarge when a kept number is beyond ±2^53.
+func ReduceBody(kind ObjectKind, raw json.RawMessage, tagKeys ...string) (json.RawMessage, error) {
 	panic("model: ReduceBody is not implemented")
 }
 
@@ -212,6 +216,17 @@ var keptFields = map[ObjectKind][]FieldPath{
 		"NetworkInterfaces[].NetworkInterfaceId",
 		"Tags[Key=eks:nodegroup-name]",
 		"Tags[Key=eks:cluster-name]",
+	},
+	// An RDS DB instance keeps its identifier, which EndpointSelector.RDS
+	// names, and what places it on the network; its endpoint address is
+	// left out.
+	KindDBInstance: {
+		"DBInstanceIdentifier",
+		"Endpoint.Port",
+		"PubliclyAccessible",
+		"VpcSecurityGroups[].VpcSecurityGroupId",
+		"DBSubnetGroup.VpcId",
+		"DBSubnetGroup.Subnets[].SubnetIdentifier",
 	},
 	KindEKSCluster: {
 		"Name", "Version",

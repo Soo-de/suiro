@@ -29,7 +29,8 @@ enum RenderKind {
 
 // Source is what a collector needs to read one source (model.Source, minus
 // the owner, which collectors do not need). Exactly one of git, aws and
-// cluster is set, matching kind.
+// cluster is set, matching kind. kept_tag_keys is set for an aws source
+// only: the tag keys cloud-collector keeps (model.Source.KeptTagKeys).
 message Source {
   string id = 1;
   SourceKind kind = 2;
@@ -37,6 +38,7 @@ message Source {
   GitSource git = 4;
   AwsSource aws = 5;
   ClusterSource cluster = 6;
+  repeated string kept_tag_keys = 7;
 }
 
 // GitSource locates an application's manifests (model.GitSource).
