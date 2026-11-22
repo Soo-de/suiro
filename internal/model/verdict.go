@@ -93,12 +93,26 @@ const (
 	EndpointKindLinkLocal EndpointKind = "link-local"
 )
 
-// Endpoint is a graph node with its resolved placement classes.
+// Endpoint is a graph node with its resolved placement classes. It also
+// keeps everything EndpointSelector matches, so a rule can be resolved
+// over a stored analysis (see Finding.New).
 type Endpoint struct {
-	Key       EndpointKey  `json:"key"`
-	Kind      EndpointKind `json:"kind"`
-	Name      string       `json:"name"`
-	Namespace string       `json:"namespace,omitempty"`
+	Key  EndpointKey  `json:"key"`
+	Kind EndpointKind `json:"kind"`
+	// ResourceKind is set for an AWS resource.
+	ResourceKind ResourceKind `json:"resourceKind,omitempty"`
+	// Name is, for an AWS resource, the identity the rds and arn selector
+	// forms compare: an RDS DB instance's identifier, an EC2 instance's ID,
+	// or a load balancer's "app/<name>/<id>", "net/<name>/<id>" or
+	// "<name>".
+	Name      string `json:"name"`
+	Namespace string `json:"namespace,omitempty"`
+	// Labels are a workload's pod labels, and Tags an AWS resource's kept
+	// tags (ClusterProfile.KeptTagKeys).
+	Labels map[string]string `json:"labels,omitempty"`
+	Tags   map[string]string `json:"tags,omitempty"`
+	// Services are the Services that select a workload.
+	Services []EndpointService `json:"services,omitempty"`
 	// Classes are the places the endpoint can be, in class order (see the
 	// package comment): for a workload one per (node group, subnet, address
 	// part) its constraints allow, for an AWS resource one per interface,
@@ -115,6 +129,17 @@ type Endpoint struct {
 	Object  ObjectKey        `json:"object,omitempty"`
 	// Owner is filled by api.ScopeFilter; core leaves it zero.
 	Owner Owner `json:"owner,omitzero"`
+}
+
+// EndpointService is a Service that selects a workload, resolved for that
+// workload as an expectation naming the Service uses it.
+type EndpointService struct {
+	// Name is "<namespace>/<name>", as EndpointSelector.Service writes it.
+	Name string `json:"name"`
+	// Mappings are the Service's ports with TargetPort resolved for this
+	// workload; a named target port the workload does not declare keeps
+	// TargetPortName and leaves TargetPort 0 (ReasonServicePortUnresolved).
+	Mappings []PortMapping `json:"mappings"`
 }
 
 // PlacementClass is one place an endpoint can be. Its location (NodeGroup,

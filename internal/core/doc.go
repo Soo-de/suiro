@@ -28,7 +28,8 @@
 //     Changes, from the stored summaries alone (see model.Change);
 //  6. evaluate the Bundle's rules and the required expectations of the
 //     fragments (each source's, at the revision its snapshot read) into
-//     Findings, marking New as model.Finding.New defines.
+//     Findings, resolving selectors over the endpoints, and mark New as
+//     model.Finding.New defines, re-checking the rules against Before.
 //
 // Explain takes steps 1 to 4 for one path and keeps its chains.
 package core

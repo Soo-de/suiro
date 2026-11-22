@@ -94,8 +94,10 @@ type Bundle struct {
 	// baseline again, with this build and the Bundle's aws read, and when
 	// it cannot it raises ReasonBeforeOutdated, on which core leaves Changes
 	// empty and marks New, as with no before side, every finding that is
-	// not satisfied. Like every stored analysis it holds path summaries
-	// only, which is all the comparison reads (see Change and Finding.New).
+	// not satisfied. Core re-checks the current Rules against Before (see
+	// Finding.New). Like every stored analysis it holds path summaries and
+	// the endpoints selectors resolve over, which is all the comparison and
+	// the re-check read.
 	Before *Analysis `json:"before,omitempty"`
 	// Fingerprint identifies what the Bundle yields: ComputeFingerprint of
 	// the Bundle under the analyzer's Limits. inputs skips the analysis when
@@ -314,10 +316,12 @@ const (
 // selector. It makes a required expectation a FindingUnmatched as a whole.
 // In a forbidden rule it yields a FindingUnmatched of its own while the
 // forms that pick something are still checked, so a stale form never hides
-// a violation the others find. An expectations file names endpoints the
-// way their own platform does (see ExpectationsFile); All, ResourceKinds
-// and Endpoints, which reach everything or use internal keys, are for
-// forbidden rules.
+// a violation the others find. Selectors are resolved over
+// Analysis.Endpoints, never over snapshots, on the after side and on Before
+// alike, so one rule picks the same way from both (see Finding.New). An
+// expectations file names endpoints the way their own platform does (see
+// ExpectationsFile); All, ResourceKinds and Endpoints, which reach
+// everything or use internal keys, are for forbidden rules.
 type EndpointSelector struct {
 	// All picks every endpoint.
 	All bool `json:"all,omitempty"`
@@ -534,13 +538,22 @@ type Finding struct {
 	Status ExpectationStatus `json:"status"`
 	// New marks a finding the change made; only new findings warn on a pull
 	// request, and the rest are existing problems listed on the open issues
-	// page. A forbidden expectation's finding is New when its path's Change,
-	// within the rule's Ports (as translated, for a Service), opens a class
-	// pair in any way: Opened or PossiblyOpened, a placement added included.
-	// Changes do not depend on rules, so a rule added since Before reports
-	// what was already open as existing. Any other finding is New when its
-	// status is worse (satisfied → unverifiable → violated) than that of
-	// the before side's finding with the same Kind, Rule, Subject and
+	// page. A forbidden expectation's finding is New when, on some piece of
+	// its path's port range within the rule's Ports (as translated, for a
+	// Service; cut where either side's paths are, as Changes cuts them),
+	// either:
+	//   - the path's Change opens a class pair in any way: Opened or
+	//     PossiblyOpened, a placement added included; or
+	//   - its status is worse (satisfied → unverifiable → violated) than
+	//     that of the same rule re-checked against Before: the rule as it is
+	//     now, resolved over Before's endpoints and judged on Before's path
+	//     outcomes, a path it did not select there counting as satisfied.
+	//
+	// So a change that brings an open path under a rule, by relabeling a
+	// workload or moving it to another namespace, is New, while a rule
+	// added or edited since Before reports what was already open as
+	// existing. Any other finding is New when its status is worse than that
+	// of the before side's finding with the same Kind, Rule, Subject and
 	// Origin.Locator, a missing one counting as satisfied.
 	New bool `json:"new"`
 	// Mode is the rule's mode when the analysis ran (see RuleMode); empty
