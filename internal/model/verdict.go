@@ -323,6 +323,21 @@ type PathDetail struct {
 	// name where the path is open and where it is closed. It is never empty
 	// (see Endpoint.Classes).
 	Classes []ClassResult `json:"classes"`
+	// GateOrigins names, once each and sorted by ID, every member of a step
+	// in Classes that comes from a source object (an adapter's gate, or the
+	// NAT gateway step) with that object and where it is declared, so a
+	// blocking step can point at a file and line. "snat:" and "endpoint:"
+	// steps have none. api.ScopeFilter keeps an entry only while its ID
+	// stays in Members (see GateRef.Redacted).
+	GateOrigins []GateOrigin `json:"gateOrigins,omitempty"`
+}
+
+// GateOrigin is where one gate of a PathDetail comes from: Gate.ID,
+// Gate.Object and Gate.Origin.
+type GateOrigin struct {
+	ID     GateID    `json:"id"`
+	Object ObjectKey `json:"object"`
+	Origin Origin    `json:"origin"`
 }
 
 // ClassResult is the chain of one class pair.
