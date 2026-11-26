@@ -18,7 +18,7 @@ type interval struct{ lo, hi uint32 }
 type intervals []interval
 
 // normalize returns the union of in, which may be in any order; it reorders
-// in and reuses its storage.
+// in and reuses its storage. O(n log n) in len(in).
 func normalize(in []interval) intervals {
 	slices.SortFunc(in, func(a, b interval) int { return cmp.Compare(a.lo, b.lo) })
 	out := intervals(in[:0])
@@ -41,6 +41,7 @@ func (s intervals) extend(v interval) intervals {
 	return s
 }
 
+// union returns the values in s or o, in O(len(s) + len(o)).
 func (s intervals) union(o intervals) intervals {
 	out := make(intervals, 0, len(s)+len(o))
 	for len(s) > 0 && len(o) > 0 {
@@ -60,6 +61,7 @@ func (s intervals) union(o intervals) intervals {
 	return out
 }
 
+// intersect returns the values in both s and o, in O(len(s) + len(o)).
 func (s intervals) intersect(o intervals) intervals {
 	out := make(intervals, 0, len(s)+len(o))
 	for len(s) > 0 && len(o) > 0 {
@@ -76,6 +78,8 @@ func (s intervals) intersect(o intervals) intervals {
 	return out
 }
 
+// diff returns the values in s but not in o, in O(len(s) + len(o)): the
+// nested loops only ever move forward through o.
 func (s intervals) diff(o intervals) intervals {
 	out := make(intervals, 0, len(s)+len(o))
 	for _, v := range s {
@@ -103,6 +107,7 @@ func (s intervals) diff(o intervals) intervals {
 	return out
 }
 
+// contains reports whether x is in s, in O(log len(s)).
 func (s intervals) contains(x uint32) bool {
 	// i is the first interval that does not end before x.
 	i, _ := slices.BinarySearchFunc(s, x, func(v interval, x uint32) int { return cmp.Compare(v.hi, x) })
@@ -142,7 +147,9 @@ func (intervalSpace) Addrs(prefixes ...netip.Prefix) AddrSet {
 	return addrSet{normalize(in)}
 }
 
-// portSet keeps the ports of each protocol apart.
+// portSet keeps the ports of each protocol apart. With n and m the
+// intervals of two sets over both protocols, Union, Intersect and Diff are
+// O(n + m), Contains is O(log n) and Ranges is O(n).
 type portSet struct{ tcp, udp intervals }
 
 func (s portSet) Intersect(o GateSet) GateSet {
@@ -187,7 +194,9 @@ func appendRanges(out []model.PortRange, proto model.Protocol, s intervals) []mo
 	return out
 }
 
-// addrSet holds IPv4 addresses as their 32-bit values.
+// addrSet holds IPv4 addresses as their 32-bit values. With n and m the
+// intervals of two sets, Union, Intersect and Diff are O(n + m), Contains
+// is O(log n) and Prefixes is O(n), at most 62 prefixes per interval.
 type addrSet struct{ addrs intervals }
 
 func (s addrSet) Intersect(o AddrSet) AddrSet {
