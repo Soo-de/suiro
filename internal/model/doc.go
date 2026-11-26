@@ -73,7 +73,8 @@
 //     Line, Resource, then Locator), then Message, so only identical
 //     problems tie.
 //   - Unexamined, every Reasons list and every list of IDs (Security
-//     Groups, gate Members) by value; Owners by Team, then Application.
+//     Groups, gate Members) by value; a PathDetail's GateOrigins by ID;
+//     Owners by Team, then Application.
 //   - Placement classes in class order: by NodeGroup, Subnet, Addresses
 //     (compared as lists, each prefix by address, then length), then Name,
 //     each class's Addresses sorted by address. Class pairs in pair order:
