@@ -1,0 +1,8 @@
+{
+  "NatGatewayId": "nat-0abc",
+  "SubnetId": "subnet-0abc",
+  "VpcId": "vpc-0abc",
+  "ConnectivityType": "public",
+  "State": "available",
+  "NatGatewayAddresses": [{"PublicIp": "203.0.113.5", "PrivateIp": "10.0.1.20"}]
+}

@@ -1,0 +1,11 @@
+{
+  "SubnetId": "subnet-0abc",
+  "VpcId": "vpc-0abc",
+  "CidrBlock": "10.0.1.0/24",
+  "AvailabilityZone": "eu-central-1a",
+  "MapPublicIpOnLaunch": true,
+  "OwnerId": "123456789012",
+  "SubnetArn": "arn:aws:ec2:eu-central-1:123456789012:subnet/subnet-0abc",
+  "AvailableIpAddressCount": 251,
+  "Tags": [{"Key": "team", "Value": "SENTINEL-tag"}]
+}

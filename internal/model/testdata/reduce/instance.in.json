@@ -1,0 +1,18 @@
+{
+  "InstanceId": "i-0abc",
+  "SubnetId": "subnet-0abc",
+  "VpcId": "vpc-0abc",
+  "PrivateIpAddress": "10.0.1.30",
+  "PublicIpAddress": "198.51.100.8",
+  "ImageId": "SENTINEL-ami",
+  "KeyName": "SENTINEL-key",
+  "IamInstanceProfile": {"Arn": "arn:aws:iam::123456789012:instance-profile/SENTINEL"},
+  "SecurityGroups": [{"GroupId": "sg-0abc", "GroupName": "SENTINEL-group-name"}],
+  "NetworkInterfaces": [{"NetworkInterfaceId": "eni-0abc", "OwnerId": "123456789012", "Description": "SENTINEL-description"}],
+  "Tags": [
+    {"Key": "eks:nodegroup-name", "Value": "workers"},
+    {"Key": "eks:cluster-name", "Value": "prod"},
+    {"Key": "team", "Value": "payments"},
+    {"Key": "secret", "Value": "SENTINEL-secret-tag"}
+  ]
+}

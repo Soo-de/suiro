@@ -1,0 +1,11 @@
+{
+  "Name": "prod",
+  "Version": "1.33",
+  "ResourcesVpcConfig": {
+    "VpcId": "vpc-0abc",
+    "SubnetIds": ["subnet-0abc", "subnet-0def"],
+    "SecurityGroupIds": ["sg-0abc"],
+    "ClusterSecurityGroupId": "sg-0def"
+  },
+  "KubernetesNetworkConfig": {"ServiceIpv4Cidr": "172.20.0.0/16", "IpFamily": "ipv4"}
+}

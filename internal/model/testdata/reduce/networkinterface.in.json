@@ -1,0 +1,20 @@
+{
+  "NetworkInterfaceId": "eni-0abc",
+  "SubnetId": "subnet-0abc",
+  "VpcId": "vpc-0abc",
+  "InterfaceType": "interface",
+  "RequesterManaged": true,
+  "RequesterId": "123456789012",
+  "OwnerId": "123456789012",
+  "Description": "RDSNetworkInterface",
+  "MacAddress": "SENTINEL-mac",
+  "PrivateIpAddress": "SENTINEL-top-level-ip",
+  "Groups": [{"GroupId": "sg-0abc", "GroupName": "SENTINEL-group-name"}],
+  "PrivateIpAddresses": [
+    {"Primary": true, "PrivateIpAddress": "10.0.1.10", "PrivateDnsName": "SENTINEL-dns", "Association": {"PublicIp": "198.51.100.7", "IpOwnerId": "123456789012"}},
+    {"Primary": false, "PrivateIpAddress": "10.0.1.11"}
+  ],
+  "Ipv4Prefixes": [{"Ipv4Prefix": "10.0.1.16/28"}],
+  "Attachment": {"InstanceId": "i-0abc", "InstanceOwnerId": "123456789012", "AttachmentId": "SENTINEL-attach"},
+  "TagSet": [{"Key": "Name", "Value": "SENTINEL-tag"}]
+}

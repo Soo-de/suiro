@@ -1,0 +1,11 @@
+{
+  "DBInstanceIdentifier": "orders-db",
+  "Endpoint": {"Port": 5432},
+  "PubliclyAccessible": false,
+  "VpcSecurityGroups": [{"VpcSecurityGroupId": "sg-0abc"}],
+  "DBSubnetGroup": {
+    "VpcId": "vpc-0abc",
+    "Subnets": [{"SubnetIdentifier": "subnet-0abc"}, {"SubnetIdentifier": "subnet-0def"}]
+  },
+  "TagList": [{"Key": "team", "Value": "payments"}]
+}

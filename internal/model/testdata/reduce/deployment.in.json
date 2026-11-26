@@ -1,0 +1,57 @@
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "nginx-deployment",
+    "namespace": "web",
+    "labels": {"app": "nginx"},
+    "annotations": {"kubectl.kubernetes.io/last-applied-configuration": "SENTINEL-annotation"},
+    "uid": "SENTINEL-uid"
+  },
+  "spec": {
+    "replicas": 3,
+    "selector": {"matchLabels": {"app": "nginx"}},
+    "template": {
+      "metadata": {
+        "labels": {"app": "nginx"},
+        "annotations": {"checksum/secret": "SENTINEL-template-annotation"}
+      },
+      "spec": {
+        "hostNetwork": false,
+        "nodeName": "node-1",
+        "nodeSelector": {"disktype": "ssd"},
+        "affinity": {
+          "nodeAffinity": {
+            "requiredDuringSchedulingIgnoredDuringExecution": {
+              "nodeSelectorTerms": [
+                {"matchExpressions": [{"key": "topology.kubernetes.io/zone", "operator": "In", "values": ["antarctica-east1", "antarctica-west1"]}]}
+              ]
+            }
+          }
+        },
+        "tolerations": [{"key": "key1", "operator": "Equal", "value": "value1", "effect": "NoSchedule"}],
+        "serviceAccountName": "SENTINEL-service-account",
+        "volumes": [{"name": "SENTINEL-volume", "secret": {"secretName": "SENTINEL-secret-name"}}],
+        "initContainers": [{"name": "SENTINEL-init", "image": "busybox"}],
+        "containers": [
+          {
+            "name": "nginx",
+            "image": "SENTINEL-image:1.14.2",
+            "command": ["SENTINEL-command"],
+            "args": ["--token=SENTINEL-arg"],
+            "env": [{"name": "DB_PASSWORD", "value": "SENTINEL-env"}],
+            "envFrom": [{"secretRef": {"name": "SENTINEL-envfrom"}}],
+            "resources": {"limits": {"cpu": "500m"}},
+            "ports": [{"containerPort": 80}, {"name": "metrics", "containerPort": 9100, "protocol": "TCP", "hostPort": 9100}]
+          },
+          {
+            "name": "sidecar",
+            "image": "SENTINEL-sidecar",
+            "env": [{"name": "TOKEN", "value": "SENTINEL-token"}]
+          }
+        ]
+      }
+    }
+  },
+  "status": {"availableReplicas": 3, "message": "SENTINEL-status"}
+}

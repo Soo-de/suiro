@@ -1,0 +1,17 @@
+{
+  "Name": "prod",
+  "Version": "1.33",
+  "Arn": "arn:aws:eks:eu-central-1:123456789012:cluster/prod",
+  "RoleArn": "arn:aws:iam::123456789012:role/SENTINEL-role",
+  "Endpoint": "SENTINEL-endpoint",
+  "CertificateAuthority": {"Data": "SENTINEL-ca"},
+  "ResourcesVpcConfig": {
+    "VpcId": "vpc-0abc",
+    "SubnetIds": ["subnet-0abc", "subnet-0def"],
+    "SecurityGroupIds": ["sg-0abc"],
+    "ClusterSecurityGroupId": "sg-0def",
+    "PublicAccessCidrs": ["SENTINEL-cidr"]
+  },
+  "KubernetesNetworkConfig": {"ServiceIpv4Cidr": "172.20.0.0/16", "IpFamily": "ipv4", "ElasticLoadBalancing": {"Enabled": false}},
+  "Tags": {"team": "SENTINEL-tag"}
+}

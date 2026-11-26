@@ -1,0 +1,22 @@
+{
+  "apiVersion": "batch/v1",
+  "kind": "CronJob",
+  "metadata": {"name": "hello"},
+  "spec": {
+    "jobTemplate": {
+      "spec": {
+        "template": {
+          "metadata": {"labels": {"app": "hello"}},
+          "spec": {
+            "hostNetwork": true,
+            "nodeName": "node-2",
+            "nodeSelector": {"zone": "a"},
+            "affinity": {"podAntiAffinity": {"requiredDuringSchedulingIgnoredDuringExecution": [{"topologyKey": "kubernetes.io/hostname"}]}},
+            "tolerations": [{"operator": "Exists"}],
+            "containers": [{"name": "hello", "ports": [{"containerPort": 8080}]}]
+          }
+        }
+      }
+    }
+  }
+}

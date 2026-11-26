@@ -1,0 +1,8 @@
+{
+  "NodegroupName": "workers",
+  "ClusterName": "prod",
+  "Subnets": ["subnet-0abc"],
+  "Labels": {"disktype": "ssd"},
+  "Taints": [{"Key": "dedicated", "Value": "db", "Effect": "NO_SCHEDULE"}],
+  "Resources": {"RemoteAccessSecurityGroup": "sg-0abc"}
+}

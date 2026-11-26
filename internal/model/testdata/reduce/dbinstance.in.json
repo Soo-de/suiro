@@ -1,0 +1,14 @@
+{
+  "DBInstanceIdentifier": "orders-db",
+  "DBInstanceArn": "arn:aws:rds:eu-central-1:123456789012:db:orders-db",
+  "MasterUsername": "SENTINEL-user",
+  "Endpoint": {"Address": "SENTINEL-address", "Port": 5432, "HostedZoneId": "SENTINEL-zone"},
+  "PubliclyAccessible": false,
+  "VpcSecurityGroups": [{"VpcSecurityGroupId": "sg-0abc", "Status": "active"}],
+  "DBSubnetGroup": {
+    "DBSubnetGroupName": "SENTINEL-subnet-group",
+    "VpcId": "vpc-0abc",
+    "Subnets": [{"SubnetIdentifier": "subnet-0abc", "SubnetStatus": "Active"}, {"SubnetIdentifier": "subnet-0def"}]
+  },
+  "TagList": [{"Key": "secret", "Value": "SENTINEL-secret-tag"}, {"Key": "team", "Value": "payments"}]
+}

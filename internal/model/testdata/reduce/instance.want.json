@@ -1,0 +1,13 @@
+{
+  "InstanceId": "i-0abc",
+  "SubnetId": "subnet-0abc",
+  "VpcId": "vpc-0abc",
+  "PrivateIpAddress": "10.0.1.30",
+  "PublicIpAddress": "198.51.100.8",
+  "SecurityGroups": [{"GroupId": "sg-0abc"}],
+  "NetworkInterfaces": [{"NetworkInterfaceId": "eni-0abc"}],
+  "Tags": [
+    {"Key": "eks:nodegroup-name", "Value": "workers"},
+    {"Key": "eks:cluster-name", "Value": "prod"}
+  ]
+}

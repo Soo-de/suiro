@@ -1,0 +1,31 @@
+{
+  "GroupName": "web",
+  "GroupId": "sg-0123456789abcdef0",
+  "VpcId": "vpc-0abc",
+  "IpPermissions": [
+    {
+      "IpProtocol": "tcp",
+      "FromPort": 443,
+      "ToPort": 443,
+      "IpRanges": [{"CidrIp": "0.0.0.0/0"}, {"CidrIp": "10.0.0.0/8"}],
+      "PrefixListIds": [{"PrefixListId": "pl-0abc"}],
+      "UserIdGroupPairs": [{"GroupId": "sg-0def"}]
+    },
+    {
+      "IpProtocol": "-1",
+      "IpRanges": [{"CidrIp": "192.168.0.0/16"}],
+      "PrefixListIds": [{"PrefixListId": "pl-0def"}],
+      "UserIdGroupPairs": [{"GroupId": "sg-0aaa"}]
+    }
+  ],
+  "IpPermissionsEgress": [
+    {
+      "IpProtocol": "udp",
+      "FromPort": 53,
+      "ToPort": 53,
+      "IpRanges": [{"CidrIp": "10.0.0.2/32"}],
+      "PrefixListIds": [{"PrefixListId": "pl-0aaa"}],
+      "UserIdGroupPairs": [{"GroupId": "sg-0bbb"}]
+    }
+  ]
+}

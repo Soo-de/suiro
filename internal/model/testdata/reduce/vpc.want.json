@@ -1,0 +1,6 @@
+{
+  "VpcId": "vpc-0abc",
+  "CidrBlock": "10.0.0.0/16",
+  "IsDefault": false,
+  "CidrBlockAssociationSet": [{"CidrBlock": "10.0.0.0/16"}, {"CidrBlock": "10.1.0.0/16"}]
+}
