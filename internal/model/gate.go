@@ -264,5 +264,5 @@ type Fragment struct {
 // and every enumerated field holding a declared value. A fragment that
 // fails it is an adapter bug, not content.
 func (f Fragment) Validate() error {
-	panic("model: Fragment.Validate is not implemented")
+	return within(checkFragment(f), "model: fragment")
 }
