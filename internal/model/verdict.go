@@ -1,6 +1,11 @@
 package model
 
-import "net/netip"
+import (
+	"fmt"
+	"net/netip"
+	"strconv"
+	"strings"
+)
 
 // Verdict is the four-valued result of one path, read from the outcomes of
 // its class pairs (see Path), of which there is always at least one:
@@ -218,14 +223,61 @@ type PathKey struct {
 // <protocol>/<from>[-<to>]", with "-<to>" left out for a single port
 // ("tcp/5432"). Finding.Subject and exceptions match this exact text.
 func (k PathKey) String() string {
-	panic("model: PathKey.String is not implemented")
+	s := string(k.Source) + pathArrow + string(k.Destination) + pathColon +
+		string(k.Ports.Protocol) + "/" + strconv.Itoa(int(k.Ports.From))
+	if k.Ports.To != k.Ports.From {
+		s += "-" + strconv.Itoa(int(k.Ports.To))
+	}
+	return s
 }
+
+// The separators of PathKey's written form.
+const (
+	pathArrow = " → "
+	pathColon = " : "
+)
 
 // ParsePathKey is the inverse of PathKey.String. It accepts only that form,
 // so ParsePathKey(k.String()) returns k for every valid k, and it errors on
 // anything else ("tcp/5432-5432" included).
 func ParsePathKey(s string) (PathKey, error) {
-	panic("model: ParsePathKey is not implemented")
+	bad := func(why string) (PathKey, error) {
+		return PathKey{}, fmt.Errorf("model: path key %q: %s", s, why)
+	}
+	source, rest, arrow := strings.Cut(s, pathArrow)
+	destination, ports, colon := strings.Cut(rest, pathColon)
+	if !arrow || !colon {
+		return bad("want <source> → <destination> : <protocol>/<ports>")
+	}
+	for _, end := range []string{source, destination} {
+		if end == "" || strings.Contains(end, " ") {
+			return bad("an endpoint is empty or holds a space")
+		}
+	}
+	protocol, numbers, _ := strings.Cut(ports, "/")
+	r := PortRange{Protocol: Protocol(protocol)}
+	if r.Protocol != ProtocolTCP && r.Protocol != ProtocolUDP {
+		return bad("protocol is not tcp or udp")
+	}
+	from, to, ranged := strings.Cut(numbers, "-")
+	var ok bool
+	if r.From, ok = parsePort(from); !ok {
+		return bad("bad port")
+	}
+	r.To = r.From
+	if ranged {
+		if r.To, ok = parsePort(to); !ok || r.To <= r.From {
+			return bad("bad end of range")
+		}
+	}
+	return PathKey{Source: EndpointKey(source), Destination: EndpointKey(destination), Ports: r}, nil
+}
+
+// parsePort reads a port as PathKey.String writes it: decimal digits with no
+// sign or leading zero.
+func parsePort(s string) (uint16, bool) {
+	n, err := strconv.ParseUint(s, 10, 16)
+	return uint16(n), err == nil && (s == "0" || s[0] != '0')
 }
 
 // Path is the summary of one source/destination pair over one port range

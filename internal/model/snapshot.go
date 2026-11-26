@@ -2,6 +2,8 @@ package model
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -68,7 +70,10 @@ type ObjectKey string
 // namespace for a namespaced Kubernetes object, and with namespace "" for
 // any other. Keys are built only here.
 func NewObjectKey(kind ObjectKind, namespace, name string) ObjectKey {
-	panic("model: NewObjectKey is not implemented")
+	if namespace != "" {
+		name = namespace + "/" + name
+	}
+	return ObjectKey(string(kind) + "/" + name)
 }
 
 // Parse splits k into the parts NewObjectKey takes. The kind runs to the
@@ -76,7 +81,27 @@ func NewObjectKey(kind ObjectKind, namespace, name string) ObjectKey {
 // Expectation.ID may contain "/", and for any other kind the rest is a name
 // or a namespace and a name. It errors on any other shape.
 func (k ObjectKey) Parse() (kind ObjectKind, namespace, name string, err error) {
-	panic("model: ObjectKey.Parse is not implemented")
+	bad := func(why string) (ObjectKind, string, string, error) {
+		return "", "", "", fmt.Errorf("model: object key %q: %s", string(k), why)
+	}
+	group, tail, _ := strings.Cut(string(k), "/")
+	source, api, _ := strings.Cut(group, ":")
+	typ, rest, ok := strings.Cut(tail, "/")
+	if !ok || source == "" || api == "" || typ == "" {
+		return bad("want <source>:<group>/<Kind>/...")
+	}
+	if rest == "" {
+		return bad("no name")
+	}
+	kind = ObjectKind(group + "/" + typ)
+	first, second, namespaced := strings.Cut(rest, "/")
+	if kind == KindExpectation || !namespaced {
+		return kind, "", rest, nil
+	}
+	if first == "" || second == "" || strings.Contains(second, "/") {
+		return bad("want a name or a namespace and a name")
+	}
+	return kind, first, second, nil
 }
 
 // Object is one source object reduced to its kept fields.
