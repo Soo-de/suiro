@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -70,7 +71,7 @@ func checkReduced(t *testing.T, kind model.ObjectKind, in, want []byte, tagKeys 
 
 func fixture(t *testing.T, name string) []byte {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("testdata", "reduce", name))
+	raw, err := fs.ReadFile(os.DirFS(filepath.Join("testdata", "reduce")), name)
 	if err != nil {
 		t.Fatal(err)
 	}
