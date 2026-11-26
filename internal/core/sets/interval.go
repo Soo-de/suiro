@@ -2,6 +2,8 @@ package sets
 
 import (
 	"cmp"
+	"encoding/binary"
+	"math/bits"
 	"net/netip"
 	"slices"
 
@@ -128,7 +130,16 @@ func (intervalSpace) Ports(ranges ...model.PortRange) GateSet {
 }
 
 func (intervalSpace) Addrs(prefixes ...netip.Prefix) AddrSet {
-	panic("sets: address sets are not implemented")
+	in := make([]interval, 0, len(prefixes))
+	for _, p := range prefixes {
+		if !p.IsValid() || !p.Addr().Is4() {
+			continue
+		}
+		lo := addrValue(p.Masked().Addr())
+		// Setting every host bit gives the last address; a /32 has none.
+		in = append(in, interval{lo, lo | ^uint32(0)>>p.Bits()})
+	}
+	return addrSet{normalize(in)}
 }
 
 // portSet keeps the ports of each protocol apart.
@@ -174,4 +185,61 @@ func appendRanges(out []model.PortRange, proto model.Protocol, s intervals) []mo
 		out = append(out, model.PortRange{Protocol: proto, From: uint16(v.lo), To: uint16(v.hi)}) //nolint:gosec
 	}
 	return out
+}
+
+// addrSet holds IPv4 addresses as their 32-bit values.
+type addrSet struct{ addrs intervals }
+
+func (s addrSet) Intersect(o AddrSet) AddrSet {
+	return addrSet{s.addrs.intersect(o.(addrSet).addrs)}
+}
+
+func (s addrSet) Union(o AddrSet) AddrSet {
+	return addrSet{s.addrs.union(o.(addrSet).addrs)}
+}
+
+func (s addrSet) Diff(o AddrSet) AddrSet {
+	return addrSet{s.addrs.diff(o.(addrSet).addrs)}
+}
+
+func (s addrSet) IsEmpty() bool { return len(s.addrs) == 0 }
+
+func (s addrSet) Contains(a netip.Addr) bool {
+	return a.Is4() && s.addrs.contains(addrValue(a))
+}
+
+func (s addrSet) Prefixes() []netip.Prefix {
+	out := make([]netip.Prefix, 0, len(s.addrs))
+	// No prefix of the cover spans two intervals, because they do not touch.
+	for _, v := range s.addrs {
+		out = appendPrefixes(out, v)
+	}
+	return out
+}
+
+// appendPrefixes appends the shortest sorted list of prefixes covering v,
+// at most 62 of them.
+func appendPrefixes(out []netip.Prefix, v interval) []netip.Prefix {
+	// 64 bits, so that stepping past the last address does not wrap around.
+	for lo, end := uint64(v.lo), uint64(v.hi)+1; lo < end; {
+		// The largest block starting at lo is limited by lo's alignment and by
+		// the number of addresses left.
+		host := min(bits.TrailingZeros32(uint32(lo)), bits.Len64(end-lo)-1) //nolint:gosec // lo ≤ v.hi
+		out = append(out, netip.PrefixFrom(valueAddr(uint32(lo)), 32-host)) //nolint:gosec // lo ≤ v.hi
+		lo += 1 << host
+	}
+	return out
+}
+
+// addrValue returns the 32-bit value of a, which must be an IPv4 address.
+func addrValue(a netip.Addr) uint32 {
+	b := a.As4()
+	return binary.BigEndian.Uint32(b[:])
+}
+
+// valueAddr is the inverse of addrValue.
+func valueAddr(v uint32) netip.Addr {
+	var b [4]byte
+	binary.BigEndian.PutUint32(b[:], v)
+	return netip.AddrFrom4(b)
 }
