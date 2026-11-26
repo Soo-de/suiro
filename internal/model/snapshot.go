@@ -1,8 +1,10 @@
 package model
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -130,7 +132,19 @@ type Object struct {
 // to Kubernetes. It errors on a Body that is not valid JSON or that holds a
 // number beyond ±2^53.
 func ComputeDigest(s Snapshot) (Digest, error) {
-	panic("model: ComputeDigest is not implemented")
+	for _, o := range s.Objects {
+		if len(o.Body) == 0 {
+			return "", fmt.Errorf("model: object %q has an empty body", o.Key)
+		}
+	}
+	objects := slices.Clone(s.Objects)
+	slices.SortStableFunc(objects, func(a, b Object) int { return cmp.Compare(a.Key, b.Key) })
+	problems := slices.Clone(s.Problems)
+	slices.SortStableFunc(problems, compareProblem)
+	return canonicalDigest(struct {
+		Objects  []Object  `json:"objects"`
+		Problems []Problem `json:"problems"`
+	}{nonNil(objects), nonNil(problems)})
 }
 
 // Origin says where an object or one of its rules came from, so every

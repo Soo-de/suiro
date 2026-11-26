@@ -3,6 +3,7 @@ module github.com/Soo-de/suiro
 go 1.27.2
 
 require (
+	github.com/gowebpki/jcs v1.0.2
 	google.golang.org/grpc v1.85.0
 	google.golang.org/protobuf v1.36.12
 	pgregory.net/rapid v1.3.0
