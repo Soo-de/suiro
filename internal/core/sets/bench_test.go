@@ -69,6 +69,23 @@ func addrUnion(s sets.Space, blocks []ipBlock) sets.AddrSet {
 	return out
 }
 
+type portProbe struct {
+	proto model.Protocol
+	port  uint16
+}
+
+// portProbes returns both ends of every range and the ports just outside
+// them, so probes hit and miss across the whole set.
+func portProbes(rs []model.PortRange) []portProbe {
+	var probes []portProbe
+	for _, r := range rs {
+		for _, p := range []uint16{r.From - 1, r.From, r.To, r.To + 1} {
+			probes = append(probes, portProbe{r.Protocol, p})
+		}
+	}
+	return probes
+}
+
 func BenchmarkPortSets(b *testing.B) {
 	in := loadBenchInput(b)
 	for _, size := range benchSizes {
@@ -77,18 +94,7 @@ func BenchmarkPortSets(b *testing.B) {
 		y := portUnion(s, in.Ports.B[:len(in.Ports.B)/size.divisor])
 		intervals := float64(len(x.Ranges()) + len(y.Ranges()))
 
-		// Both ends of every range of either operand and the ports just
-		// outside them, so probes hit and miss across the whole set.
-		type probe struct {
-			proto model.Protocol
-			port  uint16
-		}
-		var probes []probe
-		for _, r := range append(x.Ranges(), y.Ranges()...) {
-			for _, p := range []uint16{r.From - 1, r.From, r.To, r.To + 1} {
-				probes = append(probes, probe{r.Protocol, p})
-			}
-		}
+		probes := portProbes(append(x.Ranges(), y.Ranges()...))
 
 		ops := []struct {
 			name string
