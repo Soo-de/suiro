@@ -4,6 +4,7 @@ import (
 	"net/netip"
 	"reflect"
 	"slices"
+	"strconv"
 	"testing"
 
 	"github.com/Soo-de/suiro/internal/model"
@@ -461,7 +462,7 @@ func TestAnalysisValidateIdenticalProblems(t *testing.T) {
 	var tests []analysisChange
 	// A problem without an origin, one with an origin and the last one.
 	for _, i := range []int{0, 4, 10} {
-		tests = append(tests, analysisChange{"repeated " + string(rune('a'+i)), func(a *model.Analysis) {
+		tests = append(tests, analysisChange{"repeated " + strconv.Itoa(i), func(a *model.Analysis) {
 			p := a.Problems[i]
 			if p.Origin != nil {
 				// An equal origin behind another pointer is still identical.
