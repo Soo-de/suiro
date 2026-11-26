@@ -1,10 +1,17 @@
 package model
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"maps"
+	"regexp"
 	"slices"
+	"strings"
+
+	"sigs.k8s.io/yaml"
 )
 
 // ErrNumberTooLarge is returned by ReduceBody for a kept number beyond
@@ -117,7 +124,125 @@ func KeptFields(kind ObjectKind) ([]FieldPath, bool) {
 // It errors when raw is not a JSON object or kind is an AWS kind without an
 // entry, and with ErrNumberTooLarge when a kept number is beyond ±2^53.
 func ReduceBody(kind ObjectKind, raw json.RawMessage, tagKeys ...string) (json.RawMessage, error) {
-	panic("model: ReduceBody is not implemented")
+	body, err := decodeObject(raw)
+	if err != nil {
+		return nil, fmt.Errorf("model: reduce %s: %w", kind, err)
+	}
+	steps, err := keptSteps(kind, body, tagKeys)
+	if err != nil {
+		return nil, err
+	}
+	if kind == KindEKSAddon {
+		parseConfiguration(body)
+	}
+	kept := &keptNode{}
+	for _, s := range steps {
+		kept.add(s)
+	}
+	out, _ := reduceValue(body, []*keptNode{kept}).(map[string]any)
+	if kind == KindNetworkInterface {
+		dropUnmanagedDescription(out)
+	}
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(out); err != nil {
+		return nil, fmt.Errorf("model: reduce %s: %w", kind, err)
+	}
+	reduced := bytes.TrimSuffix(buf.Bytes(), []byte("\n"))
+	if err := checkNumbers(reduced); err != nil {
+		return nil, err
+	}
+	return reduced, nil
+}
+
+// decodeObject reads data as exactly one JSON object, keeping numbers as
+// written.
+func decodeObject(data []byte) (map[string]any, error) {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return nil, fmt.Errorf("invalid JSON: %w", err)
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return nil, errors.New("data after the JSON value")
+	}
+	object, ok := v.(map[string]any)
+	if !ok {
+		return nil, errors.New("not a JSON object")
+	}
+	return object, nil
+}
+
+// keptSteps returns the paths ReduceBody keeps of body, parsed.
+func keptSteps(kind ObjectKind, body map[string]any, tagKeys []string) ([][]fieldStep, error) {
+	paths, listed := KeptFields(kind)
+	switch kubernetes := strings.HasPrefix(string(kind), "k8s:"); {
+	case kubernetes:
+		paths = append(paths, kubeIdentityFields...)
+		if !listed && hasPodTemplate(body) {
+			paths = append(paths, podTemplateKept...)
+		}
+	case !listed:
+		return nil, fmt.Errorf("model: reduce %s: no kept fields for this kind", kind)
+	}
+	steps := make([][]fieldStep, 0, len(paths)+len(tagKeys))
+	for _, p := range paths {
+		steps = append(steps, p.steps())
+	}
+	tags := map[ObjectKind]string{KindInstance: "Tags", KindDBInstance: "TagList"}[kind]
+	if tags != "" {
+		// Built directly, not parsed: a tag key may hold "." or "]".
+		for _, k := range tagKeys {
+			steps = append(steps, []fieldStep{{name: tags, selector: elementSelector{list: true, key: "Key", value: k}}})
+		}
+	}
+	return steps, nil
+}
+
+// hasPodTemplate reports whether body has spec.template.spec.containers.
+func hasPodTemplate(body map[string]any) bool {
+	v := body
+	for _, name := range []string{"spec", "template", "spec"} {
+		v, _ = v[name].(map[string]any)
+	}
+	_, ok := v["containers"]
+	return ok
+}
+
+// parseConfiguration replaces an add-on's ConfigurationValues string with the
+// object it holds, or null: the string itself may hold anything and is never
+// kept.
+func parseConfiguration(body map[string]any) {
+	text, ok := body["ConfigurationValues"].(string)
+	if !ok {
+		return
+	}
+	data := []byte(text)
+	if !json.Valid(data) {
+		var err error
+		if data, err = yaml.YAMLToJSON(data); err != nil {
+			body["ConfigurationValues"] = nil
+			return
+		}
+	}
+	if object, err := decodeObject(data); err == nil {
+		body["ConfigurationValues"] = object
+	} else {
+		body["ConfigurationValues"] = nil
+	}
+}
+
+// managedDescription matches the AWS-managed interface descriptions FieldPath
+// lists.
+var managedDescription = regexp.MustCompile(
+	`^(?:ELB (?:app|net)/[A-Za-z0-9-]{1,32}/[0-9A-Fa-f]{16}|ELB [A-Za-z0-9-]{1,32}|RDSNetworkInterface)$`)
+
+func dropUnmanagedDescription(body map[string]any) {
+	if s, ok := body["Description"].(string); !ok || !managedDescription.MatchString(s) {
+		delete(body, "Description")
+	}
 }
 
 // KeptKinds returns every kind KeptFields has an entry for, sorted.
