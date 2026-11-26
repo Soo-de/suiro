@@ -668,7 +668,7 @@ func TestAddrSetFullSpaceLessOneEnd(t *testing.T) {
 	// Ascending by address: 0.0.0.0/1, 128.0.0.0/2, ..., 255.255.255.254/32.
 	for bits := 1; bits <= 32; bits++ {
 		var b [4]byte
-		binary.BigEndian.PutUint32(b[:], uint32(uint64(0xffffffff)<<(33-bits)))
+		binary.BigEndian.PutUint32(b[:], ^uint32(0)<<(33-bits))
 		lessLast = append(lessLast, netip.PrefixFrom(netip.AddrFrom4(b), bits))
 	}
 	tests := []struct {
