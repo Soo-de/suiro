@@ -59,5 +59,5 @@ type Space interface {
 // NewIntervalSpace returns the Space of sorted interval lists. Its sets
 // share no state.
 func NewIntervalSpace() Space {
-	panic("sets: NewIntervalSpace is not implemented")
+	return intervalSpace{}
 }
