@@ -1,9 +1,11 @@
 package model
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"maps"
+	"net/netip"
 	"slices"
 )
 
@@ -229,4 +231,253 @@ func checkQuantifier(field string, q Quantifier, kind ExpectationKind) error {
 		return nil
 	}
 	return checkEnum(field, q, quantifiers)
+}
+
+// checkAnalysis is Analysis.Validate. Its cost is linear in the sizes of a's
+// lists, plus one class count per run of paths between one pair of endpoints.
+func checkAnalysis(a Analysis) error {
+	err := errors.Join(
+		ascending("inputs", a.Inputs, compareSnapshotRef),
+		ascending("endpoints", a.Endpoints, compareEndpoint),
+		ascending("paths", a.Paths, comparePath),
+		ascending("changes", a.Changes, compareChange),
+		ascending("findings", a.Findings, compareFinding),
+		ascending("unexamined", a.Unexamined, cmp.Compare[Unexamined]),
+	)
+	if err != nil {
+		return err
+	}
+	// Identical problems are the one tie allowed.
+	if !slices.IsSortedFunc(a.Problems, compareProblem) {
+		return errors.New("problems: out of order")
+	}
+	if err := each("endpoints", a.Endpoints, checkEndpointLists); err != nil {
+		return err
+	}
+	if err := each("changes", a.Changes, checkChangeLists); err != nil {
+		return err
+	}
+	if err := each("findings", a.Findings, checkFindingLists); err != nil {
+		return err
+	}
+	return checkPaths(a.Endpoints, a.Paths)
+}
+
+// ascending errors unless every item sorts strictly after the one before it.
+func ascending[T any](list string, items []T, compare func(a, b T) int) error {
+	for i := 1; i < len(items); i++ {
+		if compare(items[i-1], items[i]) >= 0 {
+			return fmt.Errorf("%s[%d]: out of order or tied", list, i)
+		}
+	}
+	return nil
+}
+
+func checkEndpointLists(e Endpoint) error {
+	err := errors.Join(
+		ascending("classes", e.Classes, compareClass),
+		ascending("services", e.Services, func(a, b EndpointService) int { return cmp.Compare(a.Name, b.Name) }),
+	)
+	if err != nil {
+		return err
+	}
+	if err := each("classes", e.Classes, checkClassLists); err != nil {
+		return err
+	}
+	return each("services", e.Services, func(s EndpointService) error {
+		return ascending("mappings", s.Mappings, compareMapping)
+	})
+}
+
+func checkClassLists(c PlacementClass) error {
+	return errors.Join(
+		ascending("addresses", c.Addresses, func(a, b netip.Prefix) int { return a.Addr().Compare(b.Addr()) }),
+		ascending("securityGroups", c.SecurityGroups, cmp.Compare[string]),
+	)
+}
+
+func checkChangeLists(c Change) error {
+	return errors.Join(
+		checkPairs("opened", c.Opened),
+		checkPairs("closed", c.Closed),
+		checkPairs("possiblyOpened", c.PossiblyOpened),
+		checkPairs("possiblyClosed", c.PossiblyClosed),
+		checkPairs("undetermined", c.Undetermined),
+	)
+}
+
+func checkPairs(list string, pairs []ClassPair) error {
+	if err := ascending(list, pairs, comparePair); err != nil {
+		return err
+	}
+	return each(list, pairs, func(p ClassPair) error {
+		return errors.Join(
+			within(checkClassLists(p.Source), "source"),
+			within(checkClassLists(p.Destination), "destination"),
+		)
+	})
+}
+
+func checkFindingLists(f Finding) error {
+	return errors.Join(
+		ascending("paths", f.Paths, comparePathKey),
+		ascending("reasons", f.Reasons, cmp.Compare[ReasonCode]),
+	)
+}
+
+// pairEnds is what decides how many class pairs a path has.
+type pairEnds struct {
+	source, destination EndpointKey
+	sameNode            bool
+}
+
+// checkPaths checks every path against the classes of its endpoints.
+func checkPaths(endpoints []Endpoint, paths []Path) error {
+	classes := make(map[EndpointKey][]PlacementClass, len(endpoints))
+	for _, e := range endpoints {
+		classes[e.Key] = e.Classes
+	}
+	// Paths of one pair of endpoints are adjacent, so the last count is
+	// reused until the ends change.
+	var counted pairEnds
+	n := 0
+	for i, p := range paths {
+		ends := pairEnds{p.Key.Source, p.Key.Destination, p.SameNode}
+		if i == 0 || ends != counted {
+			source, hasSource := classes[ends.source]
+			destination, hasDestination := classes[ends.destination]
+			if !hasSource || !hasDestination {
+				return fmt.Errorf("paths[%d] (%s): an end is not among the endpoints", i, p.Key)
+			}
+			counted, n = ends, countClassPairs(source, destination, ends.sameNode)
+		}
+		if err := checkPath(p, n); err != nil {
+			return within(err, "paths[%d] (%s)", i, p.Key)
+		}
+	}
+	return nil
+}
+
+// countClassPairs returns how many class pairs a path between the two ends
+// has (see Path).
+func countClassPairs(source, destination []PlacementClass, sameNode bool) int {
+	n := len(source) * len(destination)
+	if !sameNode {
+		return n
+	}
+	type location struct{ nodeGroup, subnet string }
+	at := make(map[location]int, len(destination))
+	for _, d := range destination {
+		at[location{d.NodeGroup, d.Subnet}]++
+	}
+	for _, s := range source {
+		n += at[location{s.NodeGroup, s.Subnet}]
+	}
+	return n
+}
+
+// checkPath checks p, which has n class pairs.
+func checkPath(p Path, n int) error {
+	if n == 0 {
+		return errors.New("an end has no placement class")
+	}
+	if err := ascending("reasons", p.Reasons, cmp.Compare[ReasonCode]); err != nil {
+		return err
+	}
+	inputLevel := slices.ContainsFunc(p.Reasons, func(c ReasonCode) bool { return LevelOf(c) == LevelInput })
+	if inputLevel && (p.Verdict != Unknown || p.Outcomes != "") {
+		return errors.New("an input-level reason needs verdict unknown and no outcomes")
+	}
+	if p.Outcomes != "" {
+		return checkOutcomes(p.Outcomes, p.Verdict, n)
+	}
+	if p.Verdict != Allow && p.Verdict != Deny && p.Verdict != Unknown {
+		return fmt.Errorf("verdict %q without outcomes", p.Verdict)
+	}
+	return nil
+}
+
+// checkOutcomes checks a non-empty Path.Outcomes against its verdict.
+func checkOutcomes(outcomes string, verdict Verdict, n int) error {
+	var pass, block, undetermined int
+	for _, letter := range outcomes {
+		switch letter {
+		case 'P':
+			pass++
+		case 'B':
+			block++
+		case 'U':
+			undetermined++
+		default:
+			return fmt.Errorf("outcomes: unknown letter %q", letter)
+		}
+	}
+	switch total := pass + block + undetermined; {
+	case total != n:
+		return fmt.Errorf("outcomes: %d letters for %d class pairs", total, n)
+	case pass == total || block == total || undetermined == total:
+		return errors.New("outcomes: all the same, so they must be empty")
+	}
+	want := Unknown
+	if pass > 0 && block > 0 {
+		want = PlacementDependent
+	}
+	if verdict != want {
+		return fmt.Errorf("verdict %q, but the outcomes give %q", verdict, want)
+	}
+	return nil
+}
+
+func compareSnapshotRef(a, b SnapshotRef) int {
+	return cmp.Or(cmp.Compare(a.Key.Source, b.Key.Source), cmp.Compare(a.Key.PullRequest, b.Key.PullRequest))
+}
+
+func compareEndpoint(a, b Endpoint) int { return cmp.Compare(a.Key, b.Key) }
+
+// comparePathKey is PathKey order.
+func comparePathKey(a, b PathKey) int {
+	return cmp.Or(
+		cmp.Compare(a.Source, b.Source),
+		cmp.Compare(a.Destination, b.Destination),
+		cmp.Compare(a.Ports.Protocol, b.Ports.Protocol),
+		cmp.Compare(a.Ports.From, b.Ports.From),
+	)
+}
+
+func comparePath(a, b Path) int { return comparePathKey(a.Key, b.Key) }
+
+func compareChange(a, b Change) int { return comparePathKey(a.Key, b.Key) }
+
+func compareFinding(a, b Finding) int {
+	return cmp.Or(
+		cmp.Compare(a.Rule, b.Rule),
+		cmp.Compare(a.Subject, b.Subject),
+		cmp.Compare(a.Kind, b.Kind),
+		cmp.Compare(a.Origin.Locator, b.Origin.Locator),
+	)
+}
+
+func compareMapping(a, b PortMapping) int {
+	return cmp.Or(cmp.Compare(a.Protocol, b.Protocol), cmp.Compare(a.Port, b.Port))
+}
+
+// compareClass is class order.
+func compareClass(a, b PlacementClass) int {
+	return cmp.Or(
+		cmp.Compare(a.NodeGroup, b.NodeGroup),
+		cmp.Compare(a.Subnet, b.Subnet),
+		slices.CompareFunc(a.Addresses, b.Addresses, func(x, y netip.Prefix) int {
+			return cmp.Or(x.Addr().Compare(y.Addr()), cmp.Compare(x.Bits(), y.Bits()))
+		}),
+		cmp.Compare(a.Name, b.Name),
+	)
+}
+
+// comparePair is pair order.
+func comparePair(a, b ClassPair) int {
+	return cmp.Or(
+		compareClass(a.Source, b.Source),
+		compareClass(a.Destination, b.Destination),
+		cmp.Compare(count(a.SameNode), count(b.SameNode)),
+	)
 }

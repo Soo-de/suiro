@@ -238,7 +238,7 @@ type Limits struct {
 // and every list is in canonical order with no two entries tied, identical
 // problems aside (see the package comment).
 func (a Analysis) Validate() error {
-	panic("model: Analysis.Validate is not implemented")
+	return within(checkAnalysis(a), "model: analysis")
 }
 
 // Change is one path whose verdict or class pair outcomes differ between
