@@ -1,6 +1,8 @@
 package sets_test
 
 import (
+	"encoding/binary"
+	"net/netip"
 	"slices"
 	"testing"
 
@@ -401,4 +403,482 @@ func TestPortSetRangesOwnedByCaller(t *testing.T) {
 			checkPortSet(t, "operand", a, want)
 		})
 	}
+}
+
+// Expected address sets are CIDR arithmetic (RFC 4632): a prefix a/n is the
+// 2^(32-n) addresses starting at its masked address. An ipBlock matches its
+// cidr less every except entry.
+
+// cidrs parses prefixes, keeping any host bits they are written with.
+func cidrs(s ...string) []netip.Prefix {
+	var out []netip.Prefix
+	for _, p := range s {
+		out = append(out, netip.MustParsePrefix(p))
+	}
+	return out
+}
+
+func checkAddrSet(t *testing.T, name string, got sets.AddrSet, want []netip.Prefix) {
+	t.Helper()
+	if ps := got.Prefixes(); !slices.Equal(ps, want) {
+		t.Errorf("%s: Prefixes() = %v, want %v", name, ps, want)
+	}
+	if got.IsEmpty() != (len(want) == 0) {
+		t.Errorf("%s: IsEmpty() = %v, want %v", name, got.IsEmpty(), len(want) == 0)
+	}
+}
+
+func TestAddrSetConstruction(t *testing.T) {
+	tests := []struct {
+		name string
+		in   []netip.Prefix
+		want []netip.Prefix
+	}{
+		{"no prefixes is empty", nil, nil},
+		{"one prefix", cidrs("10.0.0.0/8"), cidrs("10.0.0.0/8")},
+		{"single address", cidrs("192.0.2.7/32"), cidrs("192.0.2.7/32")},
+		{"full space", cidrs("0.0.0.0/0"), cidrs("0.0.0.0/0")},
+		{"first address", cidrs("0.0.0.0/32"), cidrs("0.0.0.0/32")},
+		{"last address", cidrs("255.255.255.255/32"), cidrs("255.255.255.255/32")},
+		{"host bits are masked", cidrs("10.1.2.3/8"), cidrs("10.0.0.0/8")},
+		{"host bits inside an octet", cidrs("192.168.1.77/26"), cidrs("192.168.1.64/26")},
+		{"host bits with length 0", cidrs("1.2.3.4/0"), cidrs("0.0.0.0/0")},
+		{"same network written twice", cidrs("10.1.2.3/8", "10.200.0.1/8"), cidrs("10.0.0.0/8")},
+		{"adjacent halves merge", cidrs("10.0.0.0/24", "10.0.1.0/24"), cidrs("10.0.0.0/23")},
+		{"halves merge in reverse order", cidrs("10.0.1.0/24", "10.0.0.0/24"), cidrs("10.0.0.0/23")},
+		{"gap stays two", cidrs("10.0.2.0/24", "10.0.0.0/24"), cidrs("10.0.0.0/24", "10.0.2.0/24")},
+		{"touching but unaligned stays two", cidrs("10.0.1.0/24", "10.0.2.0/24"), cidrs("10.0.1.0/24", "10.0.2.0/24")},
+		{"touching addresses unaligned", cidrs("10.0.0.1/32", "10.0.0.2/32"), cidrs("10.0.0.1/32", "10.0.0.2/32")},
+		{"touching addresses aligned", cidrs("10.0.0.0/32", "10.0.0.1/32"), cidrs("10.0.0.0/31")},
+		{
+			"merges cascade",
+			cidrs("10.0.0.192/26", "10.0.0.0/26", "10.0.0.128/26", "10.0.0.64/26"),
+			cidrs("10.0.0.0/24"),
+		},
+		{
+			"merged interval needs unequal prefixes",
+			cidrs("10.0.3.0/24", "10.0.1.0/24", "10.0.2.0/24"),
+			cidrs("10.0.1.0/24", "10.0.2.0/23"),
+		},
+		{"nested prefix is absorbed", cidrs("10.1.0.0/16", "10.0.0.0/8", "10.255.255.255/32"), cidrs("10.0.0.0/8")},
+		{"halves of the space", cidrs("128.0.0.0/1", "0.0.0.0/1"), cidrs("0.0.0.0/0")},
+		{"top of the space merges", cidrs("255.255.255.255/32", "255.255.255.254/32"), cidrs("255.255.255.254/31")},
+		{"prefix after the full space", cidrs("0.0.0.0/0", "10.0.0.0/8", "255.255.255.255/32"), cidrs("0.0.0.0/0")},
+		{
+			"both edges stay apart",
+			cidrs("255.255.255.255/32", "0.0.0.0/32"),
+			cidrs("0.0.0.0/32", "255.255.255.255/32"),
+		},
+		{"IPv6 adds nothing", cidrs("2001:db8::/32", "::/0", "::1/128"), nil},
+		{"IPv4-mapped adds nothing", cidrs("::ffff:10.0.0.0/104", "::ffff:0.0.0.0/96", "::ffff:10.0.0.1/128"), nil},
+		{
+			"IPv6 beside IPv4",
+			cidrs("2001:db8::/32", "10.0.0.0/8", "::ffff:192.168.0.0/112"),
+			cidrs("10.0.0.0/8"),
+		},
+		{
+			"invalid prefixes add nothing",
+			[]netip.Prefix{
+				{},
+				netip.PrefixFrom(netip.MustParseAddr("10.0.0.0"), 33),
+				netip.PrefixFrom(netip.MustParseAddr("10.0.0.0"), -1),
+				netip.PrefixFrom(netip.Addr{}, 8),
+			},
+			nil,
+		},
+		{
+			"invalid beside valid",
+			[]netip.Prefix{
+				netip.PrefixFrom(netip.MustParseAddr("11.0.0.0"), 33),
+				netip.MustParsePrefix("10.0.0.0/8"),
+				{},
+			},
+			cidrs("10.0.0.0/8"),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := sets.NewIntervalSpace()
+			checkAddrSet(t, "Addrs", s.Addrs(tc.in...), tc.want)
+		})
+	}
+}
+
+func TestAddrSetOperations(t *testing.T) {
+	tests := []struct {
+		name                      string
+		a, b                      []netip.Prefix
+		union, inter, aDiff, bDif []netip.Prefix
+	}{
+		{name: "both empty"},
+		{
+			name:  "one empty",
+			a:     cidrs("10.0.0.0/8"),
+			union: cidrs("10.0.0.0/8"),
+			aDiff: cidrs("10.0.0.0/8"),
+		},
+		{
+			name:  "lower half removed",
+			a:     cidrs("10.0.0.0/8"),
+			b:     cidrs("10.0.0.0/9"),
+			union: cidrs("10.0.0.0/8"),
+			inter: cidrs("10.0.0.0/9"),
+			aDiff: cidrs("10.128.0.0/9"),
+		},
+		{
+			name:  "union of halves",
+			a:     cidrs("10.0.0.0/24"),
+			b:     cidrs("10.0.1.0/24"),
+			union: cidrs("10.0.0.0/23"),
+			aDiff: cidrs("10.0.0.0/24"),
+			bDif:  cidrs("10.0.1.0/24"),
+		},
+		{
+			name:  "union with a gap",
+			a:     cidrs("10.0.0.0/24"),
+			b:     cidrs("10.0.2.0/24"),
+			union: cidrs("10.0.0.0/24", "10.0.2.0/24"),
+			aDiff: cidrs("10.0.0.0/24"),
+			bDif:  cidrs("10.0.2.0/24"),
+		},
+		{
+			name:  "full space minus 10/8",
+			a:     cidrs("0.0.0.0/0"),
+			b:     cidrs("10.0.0.0/8"),
+			union: cidrs("0.0.0.0/0"),
+			inter: cidrs("10.0.0.0/8"),
+			aDiff: cidrs(
+				"0.0.0.0/5", "8.0.0.0/7", "11.0.0.0/8", "12.0.0.0/6",
+				"16.0.0.0/4", "32.0.0.0/3", "64.0.0.0/2", "128.0.0.0/1",
+			),
+		},
+		{
+			// The ipBlock of the example NetworkPolicy in the Kubernetes docs.
+			name:  "ipBlock with except",
+			a:     cidrs("172.17.0.0/16"),
+			b:     cidrs("172.17.1.0/24"),
+			union: cidrs("172.17.0.0/16"),
+			inter: cidrs("172.17.1.0/24"),
+			aDiff: cidrs(
+				"172.17.0.0/24", "172.17.2.0/23", "172.17.4.0/22", "172.17.8.0/21",
+				"172.17.16.0/20", "172.17.32.0/19", "172.17.64.0/18", "172.17.128.0/17",
+			),
+		},
+		{
+			name:  "two except entries",
+			a:     cidrs("192.168.0.0/24"),
+			b:     cidrs("192.168.0.64/26", "192.168.0.192/26"),
+			union: cidrs("192.168.0.0/24"),
+			inter: cidrs("192.168.0.64/26", "192.168.0.192/26"),
+			aDiff: cidrs("192.168.0.0/26", "192.168.0.128/26"),
+		},
+		{
+			name:  "except entries cover the block",
+			a:     cidrs("10.0.0.0/24"),
+			b:     cidrs("10.0.0.128/25", "10.0.0.0/25"),
+			union: cidrs("10.0.0.0/24"),
+			inter: cidrs("10.0.0.0/24"),
+		},
+		{
+			name:  "first address removed",
+			a:     cidrs("10.0.0.0/24"),
+			b:     cidrs("10.0.0.0/32"),
+			union: cidrs("10.0.0.0/24"),
+			inter: cidrs("10.0.0.0/32"),
+			aDiff: cidrs(
+				"10.0.0.1/32", "10.0.0.2/31", "10.0.0.4/30", "10.0.0.8/29",
+				"10.0.0.16/28", "10.0.0.32/27", "10.0.0.64/26", "10.0.0.128/25",
+			),
+		},
+		{
+			name:  "last address removed",
+			a:     cidrs("10.0.0.0/24"),
+			b:     cidrs("10.0.0.255/32"),
+			union: cidrs("10.0.0.0/24"),
+			inter: cidrs("10.0.0.255/32"),
+			aDiff: cidrs(
+				"10.0.0.0/25", "10.0.0.128/26", "10.0.0.192/27", "10.0.0.224/28",
+				"10.0.0.240/29", "10.0.0.248/30", "10.0.0.252/31", "10.0.0.254/32",
+			),
+		},
+		{
+			name:  "both ends of a block removed",
+			a:     cidrs("10.0.0.0/29"),
+			b:     cidrs("10.0.0.0/32", "10.0.0.7/32"),
+			union: cidrs("10.0.0.0/29"),
+			inter: cidrs("10.0.0.0/32", "10.0.0.7/32"),
+			aDiff: cidrs("10.0.0.1/32", "10.0.0.2/31", "10.0.0.4/31", "10.0.0.6/32"),
+		},
+		{
+			name:  "disjoint",
+			a:     cidrs("10.0.0.0/8"),
+			b:     cidrs("192.168.0.0/16"),
+			union: cidrs("10.0.0.0/8", "192.168.0.0/16"),
+			aDiff: cidrs("10.0.0.0/8"),
+			bDif:  cidrs("192.168.0.0/16"),
+		},
+		{
+			name:  "equal sets written differently",
+			a:     cidrs("10.0.0.0/23"),
+			b:     cidrs("10.0.1.9/24", "10.0.0.9/24"),
+			union: cidrs("10.0.0.0/23"),
+			inter: cidrs("10.0.0.0/23"),
+		},
+		{
+			name:  "interleaved prefixes",
+			a:     cidrs("10.0.0.0/24", "10.0.2.0/24", "10.0.4.0/24"),
+			b:     cidrs("10.0.0.128/25", "10.0.1.0/24", "10.0.2.0/25", "10.0.4.0/22"),
+			union: cidrs("10.0.0.0/23", "10.0.2.0/24", "10.0.4.0/22"),
+			inter: cidrs("10.0.0.128/25", "10.0.2.0/25", "10.0.4.0/24"),
+			aDiff: cidrs("10.0.0.0/25", "10.0.2.128/25"),
+			bDif:  cidrs("10.0.1.0/24", "10.0.5.0/24", "10.0.6.0/23"),
+		},
+		{
+			name:  "full space minus its upper half",
+			a:     cidrs("0.0.0.0/0"),
+			b:     cidrs("128.0.0.0/1"),
+			union: cidrs("0.0.0.0/0"),
+			inter: cidrs("128.0.0.0/1"),
+			aDiff: cidrs("0.0.0.0/1"),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := sets.NewIntervalSpace()
+			a, b := s.Addrs(tc.a...), s.Addrs(tc.b...)
+			checkAddrSet(t, "a∪b", a.Union(b), tc.union)
+			checkAddrSet(t, "b∪a", b.Union(a), tc.union)
+			checkAddrSet(t, "a∩b", a.Intersect(b), tc.inter)
+			checkAddrSet(t, "b∩a", b.Intersect(a), tc.inter)
+			checkAddrSet(t, "a∖b", a.Diff(b), tc.aDiff)
+			checkAddrSet(t, "b∖a", b.Diff(a), tc.bDif)
+		})
+	}
+}
+
+// Removing one end of the whole space leaves one prefix of every length.
+func TestAddrSetFullSpaceLessOneEnd(t *testing.T) {
+	var lessFirst, lessLast []netip.Prefix
+	// Ascending by address: 0.0.0.1/32, 0.0.0.2/31, ..., 128.0.0.0/1.
+	for bits := 32; bits >= 1; bits-- {
+		var b [4]byte
+		binary.BigEndian.PutUint32(b[:], uint32(1)<<(32-bits))
+		lessFirst = append(lessFirst, netip.PrefixFrom(netip.AddrFrom4(b), bits))
+	}
+	// Ascending by address: 0.0.0.0/1, 128.0.0.0/2, ..., 255.255.255.254/32.
+	for bits := 1; bits <= 32; bits++ {
+		var b [4]byte
+		binary.BigEndian.PutUint32(b[:], uint32(uint64(0xffffffff)<<(33-bits)))
+		lessLast = append(lessLast, netip.PrefixFrom(netip.AddrFrom4(b), bits))
+	}
+	tests := []struct {
+		name    string
+		removed string
+		want    []netip.Prefix
+	}{
+		{"less the first address", "0.0.0.0/32", lessFirst},
+		{"less the last address", "255.255.255.255/32", lessLast},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := sets.NewIntervalSpace()
+			all := s.Addrs(cidrs("0.0.0.0/0")...)
+			one := s.Addrs(cidrs(tc.removed)...)
+			rest := all.Diff(one)
+			checkAddrSet(t, "difference", rest, tc.want)
+			checkAddrSet(t, "difference restored", rest.Union(one), cidrs("0.0.0.0/0"))
+			checkAddrSet(t, "difference and removed", rest.Intersect(one), nil)
+		})
+	}
+}
+
+func TestAddrSetContains(t *testing.T) {
+	// None of these is an IPv4 address, so no set holds them.
+	notIPv4 := []netip.Addr{
+		{},
+		netip.MustParseAddr("::"),
+		netip.MustParseAddr("::1"),
+		netip.MustParseAddr("2001:db8::1"),
+		netip.MustParseAddr("::ffff:0.0.0.0"),
+		netip.MustParseAddr("::ffff:10.0.0.1"),
+		netip.MustParseAddr("::ffff:255.255.255.255"),
+	}
+	tests := []struct {
+		name   string
+		in     []netip.Prefix
+		in4    []string
+		notIn4 []string
+	}{
+		{name: "empty", notIn4: []string{"0.0.0.0", "10.0.0.1", "255.255.255.255"}},
+		{
+			name:   "first and last address of a prefix",
+			in:     cidrs("10.0.0.0/8"),
+			in4:    []string{"10.0.0.0", "10.1.2.3", "10.255.255.255"},
+			notIn4: []string{"0.0.0.0", "9.255.255.255", "11.0.0.0", "255.255.255.255"},
+		},
+		{
+			name:   "single address",
+			in:     cidrs("192.0.2.7/32"),
+			in4:    []string{"192.0.2.7"},
+			notIn4: []string{"192.0.2.6", "192.0.2.8"},
+		},
+		{
+			name: "full space",
+			in:   cidrs("0.0.0.0/0"),
+			in4:  []string{"0.0.0.0", "10.0.0.1", "127.0.0.1", "255.255.255.255"},
+		},
+		{
+			name: "several prefixes",
+			in:   cidrs("10.0.0.0/24", "10.0.2.0/24", "192.168.0.0/16"),
+			in4: []string{
+				"10.0.0.0", "10.0.0.255", "10.0.2.0", "10.0.2.255", "192.168.0.0", "192.168.255.255",
+			},
+			notIn4: []string{
+				"9.255.255.255", "10.0.1.0", "10.0.1.255", "10.0.3.0", "192.167.255.255", "192.169.0.0",
+			},
+		},
+		{
+			name:   "both edges",
+			in:     cidrs("0.0.0.0/32", "255.255.255.255/32"),
+			in4:    []string{"0.0.0.0", "255.255.255.255"},
+			notIn4: []string{"0.0.0.1", "255.255.255.254", "128.0.0.0"},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			x := sets.NewIntervalSpace().Addrs(tc.in...)
+			for _, a := range tc.in4 {
+				if !x.Contains(netip.MustParseAddr(a)) {
+					t.Errorf("Contains(%s) = false, want true", a)
+				}
+			}
+			for _, a := range tc.notIn4 {
+				if x.Contains(netip.MustParseAddr(a)) {
+					t.Errorf("Contains(%s) = true, want false", a)
+				}
+			}
+			for _, a := range notIPv4 {
+				if x.Contains(a) {
+					t.Errorf("Contains(%v) = true, want false for a non-IPv4 address", a)
+				}
+			}
+		})
+	}
+}
+
+func TestAddrSetKeepsNoCallerSlice(t *testing.T) {
+	tests := []struct {
+		name string
+		in   []netip.Prefix
+		want []netip.Prefix
+	}{
+		{
+			"unsorted with host bits",
+			cidrs("192.168.1.9/24", "2001:db8::/32", "10.0.1.0/24", "10.0.0.7/24"),
+			cidrs("10.0.0.0/23", "192.168.1.0/24"),
+		},
+		{
+			"already canonical",
+			cidrs("10.0.0.0/24", "10.0.2.0/24"),
+			cidrs("10.0.0.0/24", "10.0.2.0/24"),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			in := slices.Clone(tc.in)
+			x := sets.NewIntervalSpace().Addrs(in...)
+			if !slices.Equal(in, tc.in) {
+				t.Errorf("Addrs changed the caller's slice: %v, want %v", in, tc.in)
+			}
+			for i := range in {
+				in[i] = netip.MustParsePrefix("203.0.113.0/24")
+			}
+			checkAddrSet(t, "after the caller changed its slice", x, tc.want)
+		})
+	}
+}
+
+func TestAddrSetPrefixesOwnedByCaller(t *testing.T) {
+	s := sets.NewIntervalSpace()
+	want := cidrs("10.0.0.0/24", "10.0.2.0/24")
+	a := s.Addrs(want...)
+	// Results that equal an operand are where storage is most likely shared.
+	tests := []struct {
+		name string
+		set  sets.AddrSet
+	}{
+		{"constructed", a},
+		{"union with empty", a.Union(s.Addrs())},
+		{"union of empty", s.Addrs().Union(a)},
+		{"intersection with all", a.Intersect(s.Addrs(cidrs("0.0.0.0/0")...))},
+		{"difference with empty", a.Diff(s.Addrs())},
+	}
+	other := netip.MustParsePrefix("203.0.113.0/24")
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ps := tc.set.Prefixes()
+			for i := range ps {
+				ps[i] = other
+			}
+			_ = append(ps, other)
+			checkAddrSet(t, "set", tc.set, want)
+			checkAddrSet(t, "operand", a, want)
+		})
+	}
+}
+
+func TestAddrSetOperandsUnchanged(t *testing.T) {
+	tests := []struct {
+		name string
+		a, b []netip.Prefix
+	}{
+		{"split", cidrs("10.0.0.0/8"), cidrs("10.1.0.0/16")},
+		{"merge", cidrs("10.0.0.0/24", "10.0.2.0/24"), cidrs("10.0.1.0/24", "10.0.3.0/24")},
+		{"interleaved", cidrs("10.0.0.0/24", "10.0.2.0/24", "10.0.4.0/24"), cidrs("10.0.0.128/25", "10.0.4.0/22")},
+		{"empty operand", cidrs("0.0.0.0/0"), nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := sets.NewIntervalSpace()
+			a, b := s.Addrs(tc.a...), s.Addrs(tc.b...)
+			wantA, wantB := slices.Clone(a.Prefixes()), slices.Clone(b.Prefixes())
+			ops := []struct {
+				name string
+				run  func()
+			}{
+				{"a∪b", func() { a.Union(b) }},
+				{"b∪a", func() { b.Union(a) }},
+				{"a∩b", func() { a.Intersect(b) }},
+				{"b∩a", func() { b.Intersect(a) }},
+				{"a∖b", func() { a.Diff(b) }},
+				{"b∖a", func() { b.Diff(a) }},
+				{"a∪a", func() { a.Union(a) }},
+				{"a∖a", func() { a.Diff(a) }},
+				{"Contains and IsEmpty", func() { a.Contains(netip.MustParseAddr("10.0.0.1")); b.IsEmpty() }},
+			}
+			for _, op := range ops {
+				op.run()
+				checkAddrSet(t, "a after "+op.name, a, wantA)
+				checkAddrSet(t, "b after "+op.name, b, wantB)
+			}
+		})
+	}
+}
+
+// See TestPortSetDerivedResultsIndependent.
+func TestAddrSetDerivedResultsIndependent(t *testing.T) {
+	s := sets.NewIntervalSpace()
+	one := func(p string) sets.AddrSet { return s.Addrs(cidrs(p)...) }
+	base := s.Addrs(cidrs("10.0.0.0/32", "10.0.0.2/32", "10.0.0.4/32")...).Union(one("10.0.0.6/32"))
+	first := base.Union(one("10.0.0.8/32"))
+	second := base.Union(one("10.0.0.10/32"))
+	cut := base.Diff(one("10.0.0.0/32"))
+	narrowed := base.Intersect(one("10.0.0.4/30"))
+
+	prefix := cidrs("10.0.0.0/32", "10.0.0.2/32", "10.0.0.4/32", "10.0.0.6/32")
+	checkAddrSet(t, "base", base, prefix)
+	checkAddrSet(t, "first", first, append(slices.Clone(prefix), cidrs("10.0.0.8/32")...))
+	checkAddrSet(t, "second", second, append(slices.Clone(prefix), cidrs("10.0.0.10/32")...))
+	checkAddrSet(t, "cut", cut, cidrs("10.0.0.2/32", "10.0.0.4/32", "10.0.0.6/32"))
+	checkAddrSet(t, "narrowed", narrowed, cidrs("10.0.0.4/32", "10.0.0.6/32"))
 }
