@@ -87,7 +87,17 @@ func checkFragment(f Fragment) error {
 			return within(err, "profile")
 		}
 	}
-	return each("expectations", f.Expectations, checkExpectation)
+	if err := each("expectations", f.Expectations, checkExpectation); err != nil {
+		return err
+	}
+	return each("problems", f.Problems, checkProblem)
+}
+
+func checkProblem(p Problem) error {
+	if _, declared := reasons[p.Reason]; !declared {
+		return fmt.Errorf("reason: undeclared value %q", p.Reason)
+	}
+	return nil
 }
 
 func checkWorkload(w Workload) error {
@@ -251,6 +261,9 @@ func checkAnalysis(a Analysis) error {
 	if !slices.IsSortedFunc(a.Problems, compareProblem) {
 		return errors.New("problems: out of order")
 	}
+	if err := each("profile.nodeGroups", a.Profile.NodeGroups, checkNodeGroupLists); err != nil {
+		return err
+	}
 	if err := each("endpoints", a.Endpoints, checkEndpointLists); err != nil {
 		return err
 	}
@@ -271,6 +284,13 @@ func ascending[T any](list string, items []T, compare func(a, b T) int) error {
 		}
 	}
 	return nil
+}
+
+func checkNodeGroupLists(g NodeGroup) error {
+	return errors.Join(
+		ascending("subnets", g.Subnets, cmp.Compare[string]),
+		ascending("securityGroups", g.SecurityGroups, cmp.Compare[string]),
+	)
 }
 
 func checkEndpointLists(e Endpoint) error {
