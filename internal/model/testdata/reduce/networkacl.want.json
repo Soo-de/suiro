@@ -1,0 +1,10 @@
+{
+  "NetworkAclId": "acl-0abc",
+  "VpcId": "vpc-0abc",
+  "IsDefault": false,
+  "Associations": [{"SubnetId": "subnet-0abc"}],
+  "Entries": [
+    {"RuleNumber": 100, "Egress": false, "Protocol": "6", "RuleAction": "allow", "CidrBlock": "0.0.0.0/0", "PortRange": {"From": 443, "To": 443}},
+    {"RuleNumber": 32767, "Egress": true, "Protocol": "-1", "RuleAction": "deny", "CidrBlock": "0.0.0.0/0"}
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "NodegroupName": "workers",
+  "ClusterName": "prod",
+  "NodegroupArn": "arn:aws:eks:eu-central-1:123456789012:nodegroup/prod/workers/x",
+  "NodeRole": "arn:aws:iam::123456789012:role/SENTINEL-role",
+  "Subnets": ["subnet-0abc"],
+  "Labels": {"disktype": "ssd"},
+  "Taints": [{"Key": "dedicated", "Value": "db", "Effect": "NO_SCHEDULE"}],
+  "Resources": {
+    "RemoteAccessSecurityGroup": "sg-0abc",
+    "AutoScalingGroups": [{"Name": "SENTINEL-asg"}]
+  },
+  "RemoteAccess": {"Ec2SshKey": "SENTINEL-key"},
+  "Tags": {"team": "SENTINEL-tag"}
+}

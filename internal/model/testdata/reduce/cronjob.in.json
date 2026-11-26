@@ -1,0 +1,34 @@
+{
+  "apiVersion": "batch/v1",
+  "kind": "CronJob",
+  "metadata": {"name": "hello", "labels": {"app": "hello"}},
+  "spec": {
+    "schedule": "* * * * *",
+    "jobTemplate": {
+      "metadata": {"labels": {"job": "SENTINEL-job-label"}},
+      "spec": {
+        "backoffLimit": 4,
+        "template": {
+          "metadata": {"labels": {"app": "hello"}, "annotations": {"a": "SENTINEL-annotation"}},
+          "spec": {
+            "hostNetwork": true,
+            "nodeName": "node-2",
+            "nodeSelector": {"zone": "a"},
+            "affinity": {"podAntiAffinity": {"requiredDuringSchedulingIgnoredDuringExecution": [{"topologyKey": "kubernetes.io/hostname"}]}},
+            "tolerations": [{"operator": "Exists"}],
+            "restartPolicy": "OnFailure",
+            "containers": [
+              {
+                "name": "hello",
+                "image": "SENTINEL-image",
+                "command": ["/bin/sh", "-c", "SENTINEL-command"],
+                "env": [{"name": "X", "value": "SENTINEL-env"}],
+                "ports": [{"containerPort": 8080}]
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

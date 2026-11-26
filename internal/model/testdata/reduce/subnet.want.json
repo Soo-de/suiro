@@ -1,0 +1,7 @@
+{
+  "SubnetId": "subnet-0abc",
+  "VpcId": "vpc-0abc",
+  "CidrBlock": "10.0.1.0/24",
+  "AvailabilityZone": "eu-central-1a",
+  "MapPublicIpOnLaunch": true
+}

@@ -1,0 +1,13 @@
+{
+  "VpcId": "vpc-0abc",
+  "CidrBlock": "10.0.0.0/16",
+  "IsDefault": false,
+  "OwnerId": "123456789012",
+  "State": "available",
+  "DhcpOptionsId": "SENTINEL-dhcp",
+  "CidrBlockAssociationSet": [
+    {"AssociationId": "SENTINEL-assoc", "CidrBlock": "10.0.0.0/16", "CidrBlockState": {"State": "associated"}},
+    {"AssociationId": "SENTINEL-assoc2", "CidrBlock": "10.1.0.0/16"}
+  ],
+  "Tags": [{"Key": "Name", "Value": "SENTINEL-tag"}]
+}

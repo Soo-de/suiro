@@ -1,0 +1,21 @@
+{
+  "RouteTableId": "rtb-0abc",
+  "VpcId": "vpc-0abc",
+  "OwnerId": "123456789012",
+  "PropagatingVgws": [{"GatewayId": "SENTINEL-vgw"}],
+  "Associations": [
+    {"Main": true, "RouteTableAssociationId": "SENTINEL-a1"},
+    {"Main": false, "SubnetId": "subnet-0abc", "RouteTableAssociationId": "SENTINEL-a2"},
+    {"Main": false, "GatewayId": "igw-0abc", "RouteTableAssociationId": "SENTINEL-a3"}
+  ],
+  "Routes": [
+    {"DestinationCidrBlock": "10.0.0.0/16", "GatewayId": "local", "State": "active", "Origin": "CreateRouteTable"},
+    {"DestinationPrefixListId": "pl-0abc", "NatGatewayId": "nat-0abc", "State": "active", "Origin": "CreateRoute", "InstanceOwnerId": "123456789012"},
+    {"DestinationCidrBlock": "10.1.0.0/16", "TransitGatewayId": "tgw-0abc", "State": "blackhole", "Origin": "CreateRoute"},
+    {"DestinationCidrBlock": "10.2.0.0/16", "VpcPeeringConnectionId": "pcx-0abc", "State": "active", "Origin": "CreateRoute"},
+    {"DestinationCidrBlock": "10.3.0.0/16", "NetworkInterfaceId": "eni-0abc", "InstanceId": "i-0abc", "State": "active", "Origin": "CreateRoute"},
+    {"DestinationCidrBlock": "10.4.0.0/16", "LocalGatewayId": "lgw-0abc", "State": "active", "Origin": "CreateRoute"},
+    {"DestinationCidrBlock": "10.5.0.0/16", "CarrierGatewayId": "cagw-0abc", "State": "active", "Origin": "EnableVgwRoutePropagation", "DestinationIpv6CidrBlock": "SENTINEL-ipv6"}
+  ],
+  "Tags": [{"Key": "Name", "Value": "SENTINEL-tag"}]
+}

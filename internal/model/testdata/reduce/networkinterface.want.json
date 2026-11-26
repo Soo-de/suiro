@@ -1,0 +1,15 @@
+{
+  "NetworkInterfaceId": "eni-0abc",
+  "SubnetId": "subnet-0abc",
+  "VpcId": "vpc-0abc",
+  "InterfaceType": "interface",
+  "RequesterManaged": true,
+  "Description": "RDSNetworkInterface",
+  "Groups": [{"GroupId": "sg-0abc"}],
+  "PrivateIpAddresses": [
+    {"PrivateIpAddress": "10.0.1.10", "Association": {"PublicIp": "198.51.100.7"}},
+    {"PrivateIpAddress": "10.0.1.11"}
+  ],
+  "Ipv4Prefixes": [{"Ipv4Prefix": "10.0.1.16/28"}],
+  "Attachment": {"InstanceId": "i-0abc"}
+}

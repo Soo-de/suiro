@@ -1,0 +1,29 @@
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {"name": "nginx-deployment", "namespace": "web"},
+  "spec": {
+    "template": {
+      "metadata": {"labels": {"app": "nginx"}},
+      "spec": {
+        "hostNetwork": false,
+        "nodeName": "node-1",
+        "nodeSelector": {"disktype": "ssd"},
+        "affinity": {
+          "nodeAffinity": {
+            "requiredDuringSchedulingIgnoredDuringExecution": {
+              "nodeSelectorTerms": [
+                {"matchExpressions": [{"key": "topology.kubernetes.io/zone", "operator": "In", "values": ["antarctica-east1", "antarctica-west1"]}]}
+              ]
+            }
+          }
+        },
+        "tolerations": [{"key": "key1", "operator": "Equal", "value": "value1", "effect": "NoSchedule"}],
+        "containers": [
+          {"name": "nginx", "ports": [{"containerPort": 80}, {"name": "metrics", "containerPort": 9100, "protocol": "TCP", "hostPort": 9100}]},
+          {"name": "sidecar"}
+        ]
+      }
+    }
+  }
+}
