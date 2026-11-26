@@ -14,7 +14,7 @@ type GateID string
 // direction d, "<ObjectKey>#<direction>". A route table or Service gate
 // uses its ObjectKey as the GateID.
 func NewGateID(object ObjectKey, d Direction) GateID {
-	panic("model: NewGateID is not implemented")
+	return GateID(string(object) + "#" + string(d))
 }
 
 // Layer is the platform level a gate's rules come from.
