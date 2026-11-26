@@ -124,10 +124,10 @@ type Bundle struct {
 
 // ComputeFingerprint returns the fingerprint of b analyzed under l (see
 // Bundle.Fingerprint), ignoring b.Fingerprint itself: the SHA-256 of the
-// RFC 8785 canonical JSON of every other field of b plus l, built from the
-// fields as Bundle states them rather than from the Go struct's encoding,
-// lists in the order stated there and [] when empty, with these
-// reductions:
+// RFC 8785 canonical JSON of every other field of b except ToolVersion,
+// which decides nothing (see version.go), plus l, built from the fields as
+// Bundle states them rather than from the Go struct's encoding, lists in
+// the order stated there and [] when empty, with these reductions:
 //   - PullRequest keeps only RepoURL and Number;
 //   - each snapshot keeps only its Key and Digest, which covers its
 //     objects and problems;
@@ -140,7 +140,7 @@ type Bundle struct {
 // A field added to Bundle is added here. It errors where ComputeDigest
 // does.
 func ComputeFingerprint(b Bundle, l Limits) (Digest, error) {
-	panic("model: ComputeFingerprint is not implemented")
+	return canonicalDigest(newFingerprintInput(b, l))
 }
 
 // SnapshotRef records one snapshot an analysis used.
