@@ -286,17 +286,14 @@ func modelPeers(namespace string, peers []policyPeer) []model.Peer {
 	}
 	var out []model.Peer
 	for _, p := range peers {
-		switch {
-		case p.IPBlock == nil:
+		if p.IPBlock == nil {
 			out = append(out, model.Peer{Pods: &model.PodPeer{
 				Namespace:         namespace,
 				NamespaceSelector: p.NamespaceSelector,
 				PodSelector:       p.PodSelector,
 			}})
-		default:
-			if peer, modeled := prefixPeer(*p.IPBlock); modeled {
-				out = append(out, peer)
-			}
+		} else if peer, modeled := prefixPeer(*p.IPBlock); modeled {
+			out = append(out, peer)
 		}
 	}
 	return out

@@ -3,6 +3,7 @@ package k8s
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -43,7 +44,7 @@ func decodeTree(raw json.RawMessage) (any, error) {
 		return nil, err
 	}
 	if _, err := dec.Token(); err != io.EOF {
-		return nil, fmt.Errorf("data after the JSON value")
+		return nil, errors.New("data after the JSON value")
 	}
 	return tree, nil
 }
