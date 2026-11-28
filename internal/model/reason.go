@@ -328,6 +328,9 @@ const (
 	// ReasonHostPort: a container hostPort exposes the pod on its node's
 	// address, a path the model does not follow.
 	ReasonHostPort ReasonCode = "host-port"
+	// ReasonServiceSelectsNoPods: a Service maps no pod ports: it has no
+	// selector, an empty one, or is ExternalName; reported only.
+	ReasonServiceSelectsNoPods ReasonCode = "service-selects-no-pods"
 	// ReasonSymlinkSkipped: a symbolic link outside the registered path
 	// that does not point to a regular file inside the repository was not
 	// sent to the renderer; a render that needs it fails on its own.
@@ -463,6 +466,7 @@ var reasons = map[ReasonCode]ReasonSpec{
 	ReasonOwnershipConflict:            row(LevelWarning, ScopeNone, ProducerScope),
 	ReasonNamedPortUnresolved:          row(LevelWarning, ScopeNone, ProducerCore),
 	ReasonHostPort:                     row(LevelWarning, ScopeNone, ProducerAdapter),
+	ReasonServiceSelectsNoPods:         row(LevelWarning, ScopeNone, ProducerAdapter),
 	ReasonSymlinkSkipped:               row(LevelWarning, ScopeNone, ProducerGitCollector),
 	ReasonProfileConflict:              row(LevelWarning, ScopeNone, ProducerCore),
 	ReasonExpectationsInvalid:          row(LevelWarning, ScopeNone, ProducerRenderer, ProducerAdapter),

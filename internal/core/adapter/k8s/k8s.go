@@ -89,6 +89,8 @@ func (t *translation) object(o model.Object) {
 	case model.KindPod, model.KindDeployment, model.KindStatefulSet, model.KindDaemonSet,
 		model.KindReplicaSet, model.KindJob, model.KindCronJob:
 		t.workload(o)
+	case model.KindService:
+		t.service(o)
 	default:
 		t.unknownKind(o)
 	}
