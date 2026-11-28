@@ -514,40 +514,95 @@ func TestAnalysisValidateEndpointOrder(t *testing.T) {
 	tests := slices.Concat(
 		unordered("classes by node group and subnet", func(a *A) *[]model.PlacementClass { return &a.Endpoints[databaseEnd].Classes }),
 		unordered("classes by addresses and name", func(a *A) *[]model.PlacementClass { return &a.Endpoints[internetEnd].Classes }),
-		unordered("class addresses", func(a *A) *[]netip.Prefix { return &a.Endpoints[internetEnd].Classes[4].Addresses }),
+		// Without the repeated entry, which would also break class order here
+		// (see TestAnalysisValidateAddressTie).
+		unordered("class addresses", func(a *A) *[]netip.Prefix { return &a.Endpoints[internetEnd].Classes[4].Addresses })[:1],
 		unordered("class security groups", func(a *A) *[]string { return &a.Endpoints[apiEnd].Classes[0].SecurityGroups }),
 		unordered("services", func(a *A) *[]model.EndpointService { return &a.Endpoints[apiEnd].Services }),
 		unordered("service mappings", func(a *A) *[]model.PortMapping { return &a.Endpoints[apiEnd].Services[0].Mappings }),
 		unordered("second service mappings", func(a *A) *[]model.PortMapping { return &a.Endpoints[apiEnd].Services[1].Mappings }),
+		unordered("profile node group subnets", func(a *A) *[]string { return &a.Profile.NodeGroups[0].Subnets }),
 		unordered("profile node group security groups", func(a *A) *[]string { return &a.Profile.NodeGroups[0].SecurityGroups }),
 	)
 	runAnalyses(t, false, tests)
 }
 
+// changePairLists are the class pair lists of a Change.
+var changePairLists = []struct {
+	name string
+	get  func(c *model.Change) *[]model.ClassPair
+}{
+	{"opened", func(c *model.Change) *[]model.ClassPair { return &c.Opened }},
+	{"closed", func(c *model.Change) *[]model.ClassPair { return &c.Closed }},
+	{"possibly opened", func(c *model.Change) *[]model.ClassPair { return &c.PossiblyOpened }},
+	{"possibly closed", func(c *model.Change) *[]model.ClassPair { return &c.PossiblyClosed }},
+	{"undetermined", func(c *model.Change) *[]model.ClassPair { return &c.Undetermined }},
+}
+
 func TestAnalysisValidateChangeOrder(t *testing.T) {
-	lists := []struct {
-		name string
-		get  func(c *model.Change) *[]model.ClassPair
-	}{
-		{"opened", func(c *model.Change) *[]model.ClassPair { return &c.Opened }},
-		{"closed", func(c *model.Change) *[]model.ClassPair { return &c.Closed }},
-		{"possibly opened", func(c *model.Change) *[]model.ClassPair { return &c.PossiblyOpened }},
-		{"possibly closed", func(c *model.Change) *[]model.ClassPair { return &c.PossiblyClosed }},
-		{"undetermined", func(c *model.Change) *[]model.ClassPair { return &c.Undetermined }},
-	}
 	var tests []analysisChange
-	for _, l := range lists {
+	for _, l := range changePairLists {
 		// The second change shows that every one is checked.
 		pairs := func(a *model.Analysis) *[]model.ClassPair { return l.get(&a.Changes[1]) }
 		tests = append(tests, unordered(l.name, pairs)...)
-		tests = append(tests, unordered(l.name+" source security groups", func(a *model.Analysis) *[]string {
-			return &(*pairs(a))[0].Source.SecurityGroups
-		})[:1]...)
-		tests = append(tests, unordered(l.name+" destination addresses", func(a *model.Analysis) *[]netip.Prefix {
-			return &(*pairs(a))[0].Destination.Addresses
-		})[:1]...)
 	}
 	runAnalyses(t, false, tests)
+}
+
+// A list with a single class pair has no pair order to break, so only the
+// order inside one of its classes decides.
+func TestAnalysisValidateChangeClassListOrder(t *testing.T) {
+	ends := []struct {
+		name string
+		get  func(p *model.ClassPair) *model.PlacementClass
+	}{
+		{"source", func(p *model.ClassPair) *model.PlacementClass { return &p.Source }},
+		{"destination", func(p *model.ClassPair) *model.PlacementClass { return &p.Destination }},
+	}
+	faults := []struct {
+		name   string
+		change func(c *model.PlacementClass)
+	}{
+		{"addresses swapped", func(c *model.PlacementClass) { slices.Reverse(c.Addresses) }},
+		{"address repeated", func(c *model.PlacementClass) { c.Addresses = []netip.Prefix{c.Addresses[0], c.Addresses[0]} }},
+		{"security groups swapped", func(c *model.PlacementClass) { slices.Reverse(c.SecurityGroups) }},
+		{"security group repeated", func(c *model.PlacementClass) {
+			c.SecurityGroups = []string{c.SecurityGroups[0], c.SecurityGroups[0]}
+		}},
+	}
+	var valid, broken []analysisChange
+	for _, l := range changePairLists {
+		// single cuts the list to its first pair, in the second change.
+		single := func(a *model.Analysis) *model.ClassPair {
+			s := l.get(&a.Changes[1])
+			*s = (*s)[:1]
+			return &(*s)[0]
+		}
+		valid = append(valid, analysisChange{l.name + " with one pair", func(a *model.Analysis) { single(a) }})
+		for _, end := range ends {
+			for _, f := range faults {
+				broken = append(broken, analysisChange{l.name + " " + end.name + " " + f.name, func(a *model.Analysis) {
+					f.change(end.get(single(a)))
+				}})
+			}
+		}
+	}
+	runAnalyses(t, true, valid)
+	runAnalyses(t, false, broken)
+}
+
+// The endpoint has a single class, so no class order can be broken.
+func TestAnalysisValidateAddressTie(t *testing.T) {
+	only := func(addresses ...string) func(a *model.Analysis) {
+		return func(a *model.Analysis) {
+			a.Endpoints[internetEnd].Classes = []model.PlacementClass{place("a", "", "", addresses...)}
+		}
+	}
+	runAnalyses(t, true, []analysisChange{{"two addresses", only("2.0.0.0/8", "9.0.0.0/8")}})
+	runAnalyses(t, false, []analysisChange{
+		{"first address repeated", only("2.0.0.0/8", "2.0.0.0/8", "9.0.0.0/8")},
+		{"last address repeated", only("2.0.0.0/8", "9.0.0.0/8", "9.0.0.0/8")},
+	})
 }
 
 // Entries that differ outside their sort keys are still tied.
