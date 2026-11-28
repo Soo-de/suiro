@@ -1,0 +1,80 @@
+name: cluster-namespaces
+oracle: "Kubernetes, Network Policies, Targeting multiple namespaces by label; model.Namespace, order of label sources"
+sources:
+- id: cluster/lab
+  kind: cluster
+  manifests: |
+    apiVersion: v1
+    kind: Namespace
+    metadata: {name: data}
+    ---
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: analytics
+      labels: {team: analytics, kubernetes.io/metadata.name: analytics}
+    ---
+    apiVersion: v1
+    kind: Namespace
+    metadata: {name: marketing, labels: {team: marketing}}
+  want:
+    namespaces:
+    - {name: analytics, labels: {team: analytics, kubernetes.io/metadata.name: analytics}}
+    - {name: data, labels: {kubernetes.io/metadata.name: data}}
+    - {name: marketing, labels: {team: marketing, kubernetes.io/metadata.name: marketing}}
+- id: data/store
+  kind: git
+  namespace: data
+  manifests: |
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata: {name: analytics-only, namespace: data}
+    spec:
+      podSelector: {}
+      policyTypes: [Ingress]
+      ingress:
+      - from: [{namespaceSelector: {matchLabels: {team: analytics}}}]
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: db, namespace: data}
+    spec: {template: {metadata: {labels: {app: db}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: reader, namespace: analytics}
+    spec: {template: {metadata: {labels: {app: reader}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: mailer, namespace: marketing}
+    spec: {template: {metadata: {labels: {app: mailer}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: scratch, namespace: sandbox}
+    spec: {template: {metadata: {labels: {app: scratch}}, spec: {containers: [{name: app}]}}}
+  want:
+    workloads:
+    - {key: k8s:apps/Deployment/analytics/reader, kind: k8s:apps/Deployment, namespace: analytics, name: reader, podLabels: {app: reader}}
+    - {key: k8s:apps/Deployment/data/db, kind: k8s:apps/Deployment, namespace: data, name: db, podLabels: {app: db}}
+    - {key: k8s:apps/Deployment/marketing/mailer, kind: k8s:apps/Deployment, namespace: marketing, name: mailer, podLabels: {app: mailer}}
+    - {key: k8s:apps/Deployment/sandbox/scratch, kind: k8s:apps/Deployment, namespace: sandbox, name: scratch, podLabels: {app: scratch}}
+    gates:
+    - id: k8s:networking.k8s.io/NetworkPolicy/data/analytics-only#ingress
+      layer: kubernetes
+      type: filter
+      direction: ingress
+      semantics: {stateful: true, isolating: true}
+      target: {pods: {namespace: data, selector: {}}}
+      rules:
+      - action: allow
+        peers: [{pods: {namespace: data, namespaceSelector: {matchLabels: {team: analytics}}}}]
+        ports: [{protocol: all, from: 0, to: 65535}]
+        origin: {locator: "spec.ingress[0]"}
+      object: k8s:networking.k8s.io/NetworkPolicy/data/analytics-only
+paths:
+- {key: "k8s:apps/Deployment/analytics/reader → k8s:apps/Deployment/data/db : tcp/0-65535", verdict: allow}
+- {key: "k8s:apps/Deployment/marketing/mailer → k8s:apps/Deployment/data/db : tcp/0-65535", verdict: deny}
+- {key: "k8s:apps/Deployment/sandbox/scratch → k8s:apps/Deployment/data/db : tcp/0-65535", verdict: unknown, reasons: [namespace-labels-unknown]}
+- {key: "internet → k8s:apps/Deployment/data/db : tcp/5432", verdict: deny}

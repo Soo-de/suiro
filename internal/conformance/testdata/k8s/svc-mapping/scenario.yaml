@@ -1,0 +1,216 @@
+name: svc-mapping
+oracle: "Kubernetes, Service: Defining a Service, Port definitions, Multi-port Services, Services without selectors, Service type"
+sources:
+- id: shop/app
+  kind: git
+  namespace: default
+  manifests: |
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: my-service
+      namespace: default
+    spec:
+      selector:
+        app.kubernetes.io/name: MyApp
+      ports:
+        - protocol: TCP
+          port: 80
+          targetPort: 9376
+    ---
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: nginx
+      namespace: default
+      labels:
+        app.kubernetes.io/name: proxy
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:stable
+        ports:
+          - containerPort: 80
+            name: http-web-svc
+    ---
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: nginx-service
+      namespace: default
+    spec:
+      selector:
+        app.kubernetes.io/name: proxy
+      ports:
+      - name: name-of-service-port
+        protocol: TCP
+        port: 80
+        targetPort: http-web-svc
+    ---
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: my-multiport-service
+      namespace: default
+    spec:
+      selector:
+        app.kubernetes.io/name: MyApp
+      ports:
+        - name: http
+          protocol: TCP
+          port: 80
+          targetPort: 9376
+        - name: https
+          protocol: TCP
+          port: 443
+          targetPort: 9377
+    ---
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: my-service
+      namespace: prod
+    spec:
+      type: ExternalName
+      externalName: my.database.example.com
+    ---
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: my-service-without-selector
+      namespace: default
+    spec:
+      ports:
+        - name: http
+          protocol: TCP
+          port: 80
+          targetPort: 9376
+    ---
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: my-loadbalancer
+      namespace: default
+    spec:
+      type: LoadBalancer
+      selector:
+        app: public
+      ports:
+        - protocol: TCP
+          port: 80
+          targetPort: 8080
+    ---
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata: {name: allow-9376, namespace: default}
+    spec:
+      podSelector: {matchLabels: {app.kubernetes.io/name: MyApp}}
+      policyTypes: [Ingress]
+      ingress:
+      - from: [{podSelector: {matchLabels: {app: client}}}]
+        ports: [{protocol: TCP, port: 9376}]
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: my-app, namespace: default}
+    spec:
+      template:
+        metadata: {labels: {app.kubernetes.io/name: MyApp}}
+        spec: {containers: [{name: app, ports: [{containerPort: 9376}, {containerPort: 9377}]}]}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: public, namespace: default}
+    spec:
+      template:
+        metadata: {labels: {app: public}}
+        spec: {containers: [{name: app, ports: [{containerPort: 8080}]}]}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: client, namespace: default}
+    spec: {template: {metadata: {labels: {app: client}}, spec: {containers: [{name: app}]}}}
+  want:
+    workloads:
+    - {key: k8s:apps/Deployment/default/client, kind: k8s:apps/Deployment, namespace: default, name: client, podLabels: {app: client}}
+    - key: k8s:apps/Deployment/default/my-app
+      kind: k8s:apps/Deployment
+      namespace: default
+      name: my-app
+      podLabels: {app.kubernetes.io/name: MyApp}
+      ports:
+      - {container: app, port: 9376, protocol: tcp}
+      - {container: app, port: 9377, protocol: tcp}
+    - key: k8s:apps/Deployment/default/public
+      kind: k8s:apps/Deployment
+      namespace: default
+      name: public
+      podLabels: {app: public}
+      ports: [{container: app, port: 8080, protocol: tcp}]
+    - key: k8s:core/Pod/default/nginx
+      kind: k8s:core/Pod
+      namespace: default
+      name: nginx
+      podLabels: {app.kubernetes.io/name: proxy}
+      ports: [{container: nginx, name: http-web-svc, port: 80, protocol: tcp}]
+    gates:
+    - id: k8s:core/Service/default/my-loadbalancer
+      layer: kubernetes
+      type: transform
+      target: {pods: {namespace: default, selector: {matchLabels: {app: public}}}}
+      mappings: [{protocol: tcp, port: 80, targetPort: 8080}]
+      object: k8s:core/Service/default/my-loadbalancer
+    - id: k8s:core/Service/default/my-multiport-service
+      layer: kubernetes
+      type: transform
+      target: {pods: {namespace: default, selector: {matchLabels: {app.kubernetes.io/name: MyApp}}}}
+      mappings:
+      - {name: http, protocol: tcp, port: 80, targetPort: 9376}
+      - {name: https, protocol: tcp, port: 443, targetPort: 9377}
+      object: k8s:core/Service/default/my-multiport-service
+    - id: k8s:core/Service/default/my-service
+      layer: kubernetes
+      type: transform
+      target: {pods: {namespace: default, selector: {matchLabels: {app.kubernetes.io/name: MyApp}}}}
+      mappings: [{protocol: tcp, port: 80, targetPort: 9376}]
+      object: k8s:core/Service/default/my-service
+    - id: k8s:core/Service/default/nginx-service
+      layer: kubernetes
+      type: transform
+      target: {pods: {namespace: default, selector: {matchLabels: {app.kubernetes.io/name: proxy}}}}
+      mappings: [{name: name-of-service-port, protocol: tcp, port: 80, targetPortName: http-web-svc}]
+      object: k8s:core/Service/default/nginx-service
+    - id: k8s:networking.k8s.io/NetworkPolicy/default/allow-9376#ingress
+      layer: kubernetes
+      type: filter
+      direction: ingress
+      semantics: {stateful: true, isolating: true}
+      target: {pods: {namespace: default, selector: {matchLabels: {app.kubernetes.io/name: MyApp}}}}
+      rules:
+      - action: allow
+        peers: [{pods: {namespace: default, podSelector: {matchLabels: {app: client}}}}]
+        ports: [{protocol: tcp, from: 9376, to: 9376}]
+        origin: {locator: "spec.ingress[0]"}
+      object: k8s:networking.k8s.io/NetworkPolicy/default/allow-9376
+    problems:
+    - reason: aws-controller-effect
+      subject: k8s:core/Service/default/my-loadbalancer
+      origin: {locator: spec.type}
+    - reason: service-selects-no-pods
+      subject: k8s:core/Service/default/my-service-without-selector
+      origin: {locator: spec.selector}
+    - reason: service-selects-no-pods
+      subject: k8s:core/Service/prod/my-service
+      origin: {locator: spec.type}
+    - reason: standalone-pod
+      subject: k8s:core/Pod/default/nginx
+      origin: {}
+paths:
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/my-app : tcp/9376", verdict: allow}
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/my-app : tcp/80", verdict: deny}
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/my-app : tcp/9377", verdict: deny}
+- {key: "k8s:apps/Deployment/default/public → k8s:apps/Deployment/default/my-app : tcp/9376", verdict: deny}
+- {key: "internet → k8s:apps/Deployment/default/my-app : tcp/9376", verdict: deny}
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/public : tcp/8080", verdict: allow}
+- {key: "internet → k8s:apps/Deployment/default/public : tcp/8080", verdict: unknown, reasons: [aws-controller-effect]}
+- {key: "k8s:apps/Deployment/default/client → k8s:core/Pod/default/nginx : tcp/80", verdict: unknown, reasons: [standalone-pod]}

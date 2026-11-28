@@ -1,0 +1,179 @@
+name: workloads
+oracle: "Kubernetes, Workloads: the Deployment, CronJob and Pod examples; Host namespaces and hostPort"
+sources:
+- id: shop/app
+  kind: git
+  namespace: default
+  manifests: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: nginx-deployment
+      namespace: default
+      labels:
+        app: nginx
+    spec:
+      replicas: 3
+      selector:
+        matchLabels:
+          app: nginx
+      template:
+        metadata:
+          labels:
+            app: nginx
+        spec:
+          containers:
+          - name: nginx
+            image: nginx:1.14.2
+            ports:
+            - containerPort: 80
+    ---
+    apiVersion: batch/v1
+    kind: CronJob
+    metadata:
+      name: hello
+      namespace: default
+    spec:
+      schedule: "* * * * *"
+      jobTemplate:
+        spec:
+          template:
+            spec:
+              containers:
+              - name: hello
+                image: busybox:1.28
+                command: ["/bin/sh", "-c", "date"]
+              restartPolicy: OnFailure
+    ---
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: nginx
+      namespace: default
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.14.2
+        ports:
+        - containerPort: 80
+    ---
+    apiVersion: apps/v1
+    kind: StatefulSet
+    metadata: {name: db, namespace: default}
+    spec: {template: {metadata: {labels: {app: db}}, spec: {containers: [{name: db}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: DaemonSet
+    metadata: {name: logs, namespace: default}
+    spec:
+      template:
+        metadata: {labels: {app: logs}}
+        spec:
+          nodeSelector: {kubernetes.io/os: linux}
+          tolerations: [{key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}]
+          containers: [{name: logs}]
+    ---
+    apiVersion: apps/v1
+    kind: ReplicaSet
+    metadata: {name: frontend, namespace: default}
+    spec: {template: {metadata: {labels: {tier: frontend}}, spec: {containers: [{name: web}]}}}
+    ---
+    apiVersion: batch/v1
+    kind: Job
+    metadata: {name: migrate, namespace: default}
+    spec: {template: {spec: {containers: [{name: migrate}], restartPolicy: Never}}}
+    ---
+    apiVersion: apps/v1
+    kind: DaemonSet
+    metadata: {name: node-agent, namespace: default}
+    spec:
+      template:
+        metadata: {labels: {app: node-agent}}
+        spec:
+          hostNetwork: true
+          containers: [{name: agent, ports: [{containerPort: 9100}]}]
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: proxy, namespace: default}
+    spec:
+      template:
+        metadata: {labels: {app: proxy}}
+        spec: {containers: [{name: proxy, ports: [{containerPort: 8080, hostPort: 80}]}]}
+    ---
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata: {name: allow-all-ingress, namespace: default}
+    spec: {podSelector: {}, ingress: [{}], policyTypes: [Ingress]}
+  want:
+    workloads:
+    - key: k8s:apps/DaemonSet/default/logs
+      kind: k8s:apps/DaemonSet
+      namespace: default
+      name: logs
+      podLabels: {app: logs}
+      placement:
+        nodeSelector: {kubernetes.io/os: linux}
+        tolerations: [{key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}]
+    - key: k8s:apps/DaemonSet/default/node-agent
+      kind: k8s:apps/DaemonSet
+      namespace: default
+      name: node-agent
+      podLabels: {app: node-agent}
+      hostNetwork: true
+      ports: [{container: agent, port: 9100, protocol: tcp, hostPort: 9100}]
+    - key: k8s:apps/Deployment/default/nginx-deployment
+      kind: k8s:apps/Deployment
+      namespace: default
+      name: nginx-deployment
+      podLabels: {app: nginx}
+      ports: [{container: nginx, port: 80, protocol: tcp}]
+    - key: k8s:apps/Deployment/default/proxy
+      kind: k8s:apps/Deployment
+      namespace: default
+      name: proxy
+      podLabels: {app: proxy}
+      ports: [{container: proxy, port: 8080, protocol: tcp, hostPort: 80}]
+    - {key: k8s:apps/ReplicaSet/default/frontend, kind: k8s:apps/ReplicaSet, namespace: default, name: frontend, podLabels: {tier: frontend}}
+    - {key: k8s:apps/StatefulSet/default/db, kind: k8s:apps/StatefulSet, namespace: default, name: db, podLabels: {app: db}}
+    - {key: k8s:batch/CronJob/default/hello, kind: k8s:batch/CronJob, namespace: default, name: hello}
+    - {key: k8s:batch/Job/default/migrate, kind: k8s:batch/Job, namespace: default, name: migrate}
+    - key: k8s:core/Pod/default/nginx
+      kind: k8s:core/Pod
+      namespace: default
+      name: nginx
+      ports: [{container: nginx, port: 80, protocol: tcp}]
+    gates:
+    - id: k8s:networking.k8s.io/NetworkPolicy/default/allow-all-ingress#ingress
+      layer: kubernetes
+      type: filter
+      direction: ingress
+      semantics: {stateful: true, isolating: true}
+      target: {pods: {namespace: default, selector: {}}}
+      rules:
+      - action: allow
+        peers: [{all: true}]
+        ports: [{protocol: all, from: 0, to: 65535}]
+        origin: {locator: "spec.ingress[0]"}
+      object: k8s:networking.k8s.io/NetworkPolicy/default/allow-all-ingress
+    problems:
+    - reason: host-network
+      subject: k8s:apps/DaemonSet/default/node-agent
+      origin: {locator: spec.template.spec.hostNetwork}
+    - reason: host-port
+      subject: k8s:apps/DaemonSet/default/node-agent
+      origin: {locator: "spec.template.spec.containers[0].ports[0]"}
+    - reason: host-port
+      subject: k8s:apps/Deployment/default/proxy
+      origin: {locator: "spec.template.spec.containers[0].ports[0]"}
+    - reason: standalone-pod
+      subject: k8s:core/Pod/default/nginx
+      origin: {}
+paths:
+- {key: "k8s:apps/Deployment/default/nginx-deployment → k8s:apps/StatefulSet/default/db : tcp/0-65535", verdict: allow}
+- {key: "k8s:batch/CronJob/default/hello → k8s:apps/Deployment/default/nginx-deployment : tcp/80", verdict: allow}
+- {key: "k8s:batch/Job/default/migrate → k8s:apps/ReplicaSet/default/frontend : udp/53", verdict: allow}
+- {key: "k8s:apps/StatefulSet/default/db → k8s:apps/DaemonSet/default/logs : tcp/24224", verdict: allow}
+- {key: "k8s:apps/Deployment/default/nginx-deployment → k8s:apps/Deployment/default/proxy : tcp/8080", verdict: allow}
+- {key: "k8s:apps/Deployment/default/nginx-deployment → k8s:core/Pod/default/nginx : tcp/80", verdict: unknown, reasons: [standalone-pod]}
+- {key: "k8s:apps/Deployment/default/nginx-deployment → k8s:apps/DaemonSet/default/node-agent : tcp/9100", verdict: unknown, reasons: [host-network]}

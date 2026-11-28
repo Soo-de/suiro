@@ -1,0 +1,124 @@
+name: kinds
+oracle: "model.UnsupportedKinds and IgnoredKinds; Calico and Cilium network policy references; Argo Rollouts, cert-manager"
+sources:
+- id: shop/app
+  kind: git
+  namespace: app
+  manifests: |
+    apiVersion: crd.projectcalico.org/v1
+    kind: NetworkPolicy
+    metadata: {name: calico-deny, namespace: calico}
+    spec: {selector: all(), types: [Ingress]}
+    ---
+    apiVersion: cilium.io/v2
+    kind: CiliumNetworkPolicy
+    metadata: {name: cilium-rule, namespace: cilium}
+    spec: {endpointSelector: {}}
+    ---
+    apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata: {name: web, namespace: edge}
+    spec: {ingressClassName: alb}
+    ---
+    apiVersion: elbv2.k8s.aws/v1beta1
+    kind: TargetGroupBinding
+    metadata: {name: web, namespace: edge}
+    spec: {serviceRef: {name: web, port: 80}}
+    ---
+    apiVersion: vpcresources.k8s.aws/v1beta1
+    kind: SecurityGroupPolicy
+    metadata: {name: pods, namespace: edge}
+    spec: {securityGroups: {groupIds: [sg-0123]}}
+    ---
+    apiVersion: crd.k8s.amazonaws.com/v1alpha1
+    kind: ENIConfig
+    metadata: {name: eu-central-1a}
+    spec: {subnet: subnet-0123}
+    ---
+    apiVersion: v1
+    kind: ConfigMap
+    metadata: {name: settings, namespace: app}
+    data: {mode: fast}
+    ---
+    apiVersion: v1
+    kind: Secret
+    metadata: {name: credentials, namespace: app}
+    type: Opaque
+    ---
+    apiVersion: argoproj.io/v1alpha1
+    kind: Rollout
+    metadata: {name: canary, namespace: rollouts}
+    spec:
+      template:
+        metadata: {labels: {app: canary}}
+        spec: {containers: [{name: app}]}
+    ---
+    apiVersion: cert-manager.io/v1
+    kind: Certificate
+    metadata: {name: tls, namespace: app}
+    spec: {secretName: tls, dnsNames: [example.com]}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: a, namespace: app}
+    spec: {template: {metadata: {labels: {app: a}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: b, namespace: app}
+    spec: {template: {metadata: {labels: {app: b}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: c, namespace: calico}
+    spec: {template: {metadata: {labels: {app: c}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: d, namespace: cilium}
+    spec: {template: {metadata: {labels: {app: d}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: e, namespace: rollouts}
+    spec: {template: {metadata: {labels: {app: e}}, spec: {containers: [{name: app}]}}}
+  want:
+    workloads:
+    - {key: k8s:apps/Deployment/app/a, kind: k8s:apps/Deployment, namespace: app, name: a, podLabels: {app: a}}
+    - {key: k8s:apps/Deployment/app/b, kind: k8s:apps/Deployment, namespace: app, name: b, podLabels: {app: b}}
+    - {key: k8s:apps/Deployment/calico/c, kind: k8s:apps/Deployment, namespace: calico, name: c, podLabels: {app: c}}
+    - {key: k8s:apps/Deployment/cilium/d, kind: k8s:apps/Deployment, namespace: cilium, name: d, podLabels: {app: d}}
+    - {key: k8s:apps/Deployment/rollouts/e, kind: k8s:apps/Deployment, namespace: rollouts, name: e, podLabels: {app: e}}
+    problems:
+    - reason: aws-controller-effect
+      subject: k8s:elbv2.k8s.aws/TargetGroupBinding/edge/web
+      origin: {}
+    - reason: aws-controller-effect
+      subject: k8s:networking.k8s.io/Ingress/edge/web
+      origin: {}
+    - reason: custom-networking
+      subject: k8s:crd.k8s.amazonaws.com/ENIConfig/eu-central-1a
+      origin: {}
+    - reason: kind-unrecognized
+      subject: k8s:cert-manager.io/Certificate/app/tls
+      origin: {}
+    - reason: pod-security-groups
+      subject: k8s:vpcresources.k8s.aws/SecurityGroupPolicy/edge/pods
+      origin: {}
+    - reason: policy-kind-unsupported
+      subject: k8s:cilium.io/CiliumNetworkPolicy/cilium/cilium-rule
+      origin: {}
+    - reason: policy-kind-unsupported
+      subject: k8s:crd.projectcalico.org/NetworkPolicy/calico/calico-deny
+      origin: {}
+    - reason: workload-kind-unsupported
+      subject: k8s:argoproj.io/Rollout/rollouts/canary
+      origin: {}
+paths:
+- {key: "k8s:apps/Deployment/app/a → k8s:apps/Deployment/app/b : tcp/0-65535", verdict: allow}
+- {key: "k8s:apps/Deployment/app/a → internet : tcp/443", verdict: allow}
+- {key: "k8s:apps/Deployment/app/a → k8s:apps/Deployment/calico/c : tcp/80", verdict: unknown, reasons: [policy-kind-unsupported]}
+- {key: "k8s:apps/Deployment/calico/c → k8s:apps/Deployment/app/a : tcp/80", verdict: unknown, reasons: [policy-kind-unsupported]}
+- {key: "k8s:apps/Deployment/app/a → k8s:apps/Deployment/cilium/d : tcp/80", verdict: unknown, reasons: [policy-kind-unsupported]}
+- {key: "k8s:apps/Deployment/app/a → k8s:apps/Deployment/rollouts/e : tcp/80", verdict: unknown, reasons: [workload-kind-unsupported]}
+- {key: "k8s:apps/Deployment/rollouts/e → k8s:apps/Deployment/app/a : tcp/80", verdict: unknown, reasons: [workload-kind-unsupported]}
