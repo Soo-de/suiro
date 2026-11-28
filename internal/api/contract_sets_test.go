@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -161,6 +162,20 @@ func TestParameterEnums(t *testing.T) {
 	}
 }
 
+// knownValues returns the values of the "Known values: a, b." list in text,
+// nil when it has none.
+func knownValues(text string) []string {
+	found := regexp.MustCompile(`Known\s+values:\s*([^.]*)(\.|$)`).FindStringSubmatch(text)
+	if found == nil {
+		return nil
+	}
+	var out []string
+	for _, v := range strings.Split(found[1], ",") {
+		out = append(out, strings.TrimSpace(v))
+	}
+	return out
+}
+
 // mentions reports whether text names value as a word of its own.
 func mentions(text, value string) bool {
 	return regexp.MustCompile(`(^|[^\w-])` + regexp.QuoteMeta(value) + `($|[^\w-])`).MatchString(text)
@@ -176,7 +191,13 @@ func TestOpenSetsDescribeTheirKnownValues(t *testing.T) {
 			model.EndpointKindExternalPrivate, model.EndpointKindLinkLocal),
 		reflect.TypeFor[model.ResourceKind](): values(
 			model.ResourceDatabase, model.ResourceLoadBalancer, model.ResourceInstance, model.ResourceOther),
-		reflect.TypeFor[model.Protocol]():      values(model.ProtocolTCP, model.ProtocolUDP),
+		reflect.TypeFor[model.Protocol](): values(model.ProtocolTCP, model.ProtocolUDP),
+		reflect.TypeFor[model.RuleMode](): values(model.ModeWarn, model.ModeBlock),
+		reflect.TypeFor[model.ReasonLevel](): values(
+			model.LevelGate, model.LevelPartial, model.LevelInput, model.LevelWarning),
+		reflect.TypeFor[model.ReasonScope](): values(
+			model.ScopeNone, model.ScopeStep, model.ScopeEndpoint, model.ScopeNamespace, model.ScopeSource,
+			model.ScopeExpectation, model.ScopePaths, model.ScopeAnalysis),
 		reflect.TypeFor[model.Toggle]():        values(model.ToggleOn, model.ToggleOff),
 		reflect.TypeFor[model.ProfileSource](): values(model.ProfileFromAWS, model.ProfileFromAdmin),
 		reflect.TypeFor[model.Unexamined](): values(
@@ -184,26 +205,36 @@ func TestOpenSetsDescribeTheirKnownValues(t *testing.T) {
 			model.UnexaminedAWSLayer, model.UnexaminedIPv6, model.UnexaminedPairs),
 	}
 	seen := map[reflect.Type]bool{}
+	portRange := false
 	walkLeaves(t, loadSpec(t), func(at string, typ reflect.Type, s *openapi3.Schema, outer string) {
 		want, ok := known[typ]
 		if !ok {
 			return
 		}
 		seen[typ] = true
+		// A port range may cover every protocol; a Service port names one.
+		if at == "PortRange.protocol" {
+			portRange = true
+			want = append(slices.Clone(want), string(model.ProtocolAll))
+		}
+		listed := slices.Concat(knownValues(s.Description), knownValues(outer))
 		var missing []string
 		for _, v := range want {
-			if !mentions(s.Description+" "+outer, v) {
+			if !slices.Contains(listed, v) {
 				missing = append(missing, v)
 			}
 		}
 		if len(missing) > 0 {
-			t.Errorf("%s (%s): description lacks %v", at, typ, missing)
+			t.Errorf("%s (%s): \"Known values: ...\" in the description lacks %v, lists %v", at, typ, missing, listed)
 		}
 	})
 	for typ := range known {
 		if !seen[typ] {
 			t.Errorf("no response field of type %s was checked", typ)
 		}
+	}
+	if !portRange {
+		t.Error("PortRange.protocol was not checked")
 	}
 }
 
@@ -238,11 +269,12 @@ func TestErrorCodeIsAnOpenSet(t *testing.T) {
 	if !s.Type.Is("string") || len(s.Enum) > 0 || s.Const != nil {
 		t.Errorf("Error.code must be a plain string, got type %v enum %v", s.Type, s.Enum)
 	}
+	listed := knownValues(s.Description)
 	for _, c := range contracts() {
 		for _, codes := range c.errors {
 			for _, v := range codes {
-				if !mentions(s.Description, v) {
-					t.Errorf("Error.code: description lacks %q", v)
+				if !slices.Contains(listed, v) {
+					t.Errorf("Error.code: \"Known values: ...\" lacks %q", v)
 				}
 			}
 		}

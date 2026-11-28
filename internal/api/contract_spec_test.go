@@ -479,8 +479,39 @@ func TestSpecCarriesTheNoteExamples(t *testing.T) {
 	}
 }
 
-// See model.PathDetail.GateOrigins.
+// gateOrigin is the origin of a gate whose object is declared at the top of
+// file. A NetworkPolicy gate adds its direction to the object key.
+func gateOrigin(object model.ObjectKey, direction string, source model.SourceID, file string) model.GateOrigin {
+	id := model.GateID(object)
+	if direction != "" {
+		id += model.GateID("#" + direction)
+	}
+	return model.GateOrigin{ID: id, Object: object, Origin: model.Origin{Source: source, File: file, Line: 1}}
+}
+
+// The gate origins of the note's scenario, by the verdict of its three detail
+// examples, sorted by ID. See model.PathDetail.GateOrigins.
+func noteGateOrigins() map[model.Verdict][]model.GateOrigin {
+	service := gateOrigin("k8s:core/Service/data/postgres", "",
+		"data/orders-db", "deploy/orders-db/service.yaml")
+	postgres := gateOrigin("k8s:networking.k8s.io/NetworkPolicy/data/postgres", "ingress",
+		"data/orders-db", "deploy/orders-db/netpol-postgres.yaml")
+	apiPolicy := gateOrigin("k8s:networking.k8s.io/NetworkPolicy/shop/api", "egress",
+		"shop/storefront", "deploy/storefront/netpol-api.yaml")
+	deny := gateOrigin("k8s:networking.k8s.io/NetworkPolicy/shop/default-deny", "egress",
+		"shop/storefront", "deploy/storefront/netpol-default-deny.yaml")
+	web := gateOrigin("k8s:networking.k8s.io/NetworkPolicy/shop/web", "egress",
+		"shop/storefront", "deploy/storefront/netpol-web.yaml")
+	return map[model.Verdict][]model.GateOrigin{
+		model.Allow:   {service, postgres, apiPolicy, deny},
+		model.Deny:    {service, postgres, deny, web},
+		model.Unknown: {service, postgres},
+	}
+}
+
 func TestDetailExampleGateOrigins(t *testing.T) {
+	want := noteGateOrigins()
+	seen := map[model.Verdict]bool{}
 	for _, e := range responseExamples(t, loadSpec(t)) {
 		if e.op.id != "getPathDetail" || e.status != http.StatusOK {
 			continue
@@ -490,27 +521,72 @@ func TestDetailExampleGateOrigins(t *testing.T) {
 			t.Errorf("%s: %v", e, err)
 			continue
 		}
-		var members []model.GateID
-		for _, class := range detail.Classes {
-			for _, step := range class.Gates {
-				for _, id := range step.Gate.Members {
-					if !strings.HasPrefix(string(id), "snat:") && !strings.HasPrefix(string(id), "endpoint:") {
-						members = append(members, id)
-					}
-				}
-			}
+		seen[detail.Verdict] = true
+		if !slices.Equal(detail.GateOrigins, want[detail.Verdict]) {
+			t.Errorf("%s: gateOrigins\n got %s\nwant %s",
+				e, compact(detail.GateOrigins), compact(want[detail.Verdict]))
 		}
-		slices.Sort(members)
-		members = slices.Compact(members)
-		var named []model.GateID
-		for _, origin := range detail.GateOrigins {
-			named = append(named, origin.ID)
-			if origin.Object == "" || origin.Origin.Source == "" {
-				t.Errorf("%s: gate origin %s lacks its object or source", e, origin.ID)
-			}
+	}
+	for verdict := range want {
+		if !seen[verdict] {
+			t.Errorf("no detail example with verdict %s", verdict)
 		}
-		if !slices.Equal(named, members) {
-			t.Errorf("%s: gateOrigins IDs = %v, want every member once, sorted: %v", e, named, members)
+	}
+}
+
+// parameterSchema returns the schema of the named parameter of c.
+func parameterSchema(t *testing.T, doc *openapi3.T, c opContract, name string) *openapi3.Schema {
+	t.Helper()
+	item, op := operationOf(t, doc, c)
+	for _, ref := range slices.Concat(item.Parameters, op.Parameters) {
+		if p := ref.Value; p != nil && p.Name == name && p.Schema != nil && p.Schema.Value != nil {
+			return p.Schema.Value
+		}
+	}
+	t.Fatalf("%s has no %s parameter with a schema", c.id, name)
+	return nil
+}
+
+// checkValues demands that s accepts every value of valid and no other.
+func checkValues(t *testing.T, label string, s *openapi3.Schema, valid, invalid []any) {
+	t.Helper()
+	for _, value := range valid {
+		if err := s.VisitJSON(value, openapi3.EnableJSONSchema2020()); err != nil {
+			t.Errorf("%s rejects %s: %v", label, compact(value), err)
+		}
+	}
+	for _, value := range invalid {
+		if s.VisitJSON(value, openapi3.EnableJSONSchema2020()) == nil {
+			t.Errorf("%s accepts %s", label, compact(value))
+		}
+	}
+}
+
+// The ports grammar is that of model.ParsePathKey: tcp or udp, one port or a
+// range, decimal digits without sign or leading zero.
+func TestSpecPortsParameter(t *testing.T) {
+	valid := []any{"tcp/5432", "udp/53", "tcp/30000-32767", "tcp/0", "udp/0-65535", "tcp/0-5431", "tcp/65535"}
+	invalid := []any{
+		"", "tcp", "tcp/", "5432", "/5432", "all/53", "sctp/53", "TCP/53", "tcp:53", "tcp/http",
+		"tcp/05432", "tcp/00", "tcp/1-02", "tcp/-1", "tcp/+1", "tcp/1-", "tcp/1-2-3", "tcp/100000",
+		"tcp/1-100000", "tcp/53,udp/53", " tcp/53", "tcp/53 ", "xtcp/53", "tcp/53x", 53.0,
+	}
+	doc := loadSpec(t)
+	for _, c := range contracts() {
+		if c.id == "listPaths" || c.id == "getPathDetail" {
+			checkValues(t, c.id+" ports", parameterSchema(t, doc, c, "ports"), valid, invalid)
+		}
+	}
+}
+
+// Analysis numbers start at 1; 0 is an analysis not yet stored.
+func TestSpecAnalysisID(t *testing.T) {
+	valid := []any{1.0, 42.0, float64(1 << 53)}
+	invalid := []any{0.0, -1.0, 1.5, "42", "abc", ""}
+	doc := loadSpec(t)
+	for _, c := range contracts() {
+		if strings.Contains(c.path, "{id}") {
+			checkValues(t, c.id+" id", parameterSchema(t, doc, c, "id"), valid, invalid)
 		}
 	}
 }
