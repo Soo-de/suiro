@@ -1,0 +1,102 @@
+{
+  "key": {
+    "source": "k8s:batch/CronJob/ops/report",
+    "destination": "k8s:apps/StatefulSet/data/postgres",
+    "ports": {
+      "protocol": "tcp",
+      "from": 5432,
+      "to": 5432
+    }
+  },
+  "verdict": "unknown",
+  "reasons": [
+    "ipblock-pod-match-unknown"
+  ],
+  "classes": [
+    {
+      "pair": {
+        "source": {
+          "name": "cluster",
+          "addresses": [
+            "10.244.0.0/16"
+          ]
+        },
+        "destination": {
+          "name": "cluster",
+          "addresses": [
+            "10.244.0.0/16"
+          ]
+        }
+      },
+      "outcome": "undetermined",
+      "gates": [
+        {
+          "gate": {
+            "layer": "kubernetes",
+            "type": "transform",
+            "members": [
+              "k8s:core/Service/data/postgres"
+            ],
+            "owners": [
+              {
+                "team": "data",
+                "application": "orders-db"
+              }
+            ]
+          },
+          "outcome": "pass",
+          "mappings": [
+            {
+              "gate": "k8s:core/Service/data/postgres",
+              "mapping": {
+                "name": "pg",
+                "protocol": "tcp",
+                "port": 5432,
+                "targetPort": 5432,
+                "targetPortName": "pg"
+              }
+            }
+          ]
+        },
+        {
+          "gate": {
+            "layer": "kubernetes",
+            "type": "filter",
+            "direction": "egress",
+            "members": []
+          },
+          "outcome": "pass"
+        },
+        {
+          "gate": {
+            "layer": "kubernetes",
+            "type": "filter",
+            "direction": "ingress",
+            "members": [
+              "k8s:networking.k8s.io/NetworkPolicy/data/postgres#ingress"
+            ],
+            "owners": [
+              {
+                "team": "data",
+                "application": "orders-db"
+              }
+            ]
+          },
+          "outcome": "undetermined",
+          "rules": [
+            {
+              "gate": "k8s:networking.k8s.io/NetworkPolicy/data/postgres#ingress",
+              "origin": {
+                "source": "data/orders-db",
+                "file": "deploy/orders-db/netpol-postgres.yaml",
+                "line": 22,
+                "locator": "spec.ingress[1].from[0]"
+              }
+            }
+          ],
+          "reason": "ipblock-pod-match-unknown"
+        }
+      ]
+    }
+  ]
+}

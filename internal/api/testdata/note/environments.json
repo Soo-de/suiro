@@ -1,0 +1,17 @@
+{
+  "items": [
+    {
+      "name": "lab",
+      "baseline": {
+        "id": 42,
+        "status": "partial",
+        "createdAt": "2026-12-08T09:14:05Z"
+      },
+      "latestAttempt": {
+        "id": 43,
+        "status": "failed",
+        "createdAt": "2026-12-08T09:31:40Z"
+      }
+    }
+  ]
+}

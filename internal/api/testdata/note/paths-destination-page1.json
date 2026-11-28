@@ -1,0 +1,41 @@
+{
+  "items": [
+    {
+      "key": {
+        "source": "external-private",
+        "destination": "k8s:apps/StatefulSet/data/postgres",
+        "ports": {
+          "protocol": "tcp",
+          "from": 5432,
+          "to": 5432
+        }
+      },
+      "verdict": "deny"
+    },
+    {
+      "key": {
+        "source": "internet",
+        "destination": "k8s:apps/StatefulSet/data/postgres",
+        "ports": {
+          "protocol": "tcp",
+          "from": 5432,
+          "to": 5432
+        }
+      },
+      "verdict": "deny"
+    },
+    {
+      "key": {
+        "source": "k8s:apps/Deployment/shop/api",
+        "destination": "k8s:apps/StatefulSet/data/postgres",
+        "ports": {
+          "protocol": "tcp",
+          "from": 5432,
+          "to": 5432
+        }
+      },
+      "verdict": "allow"
+    }
+  ],
+  "next": "azhzOmFwcHMvRGVwbG95bWVudC9zaG9wL2FwaSDihpIgazhzOmFwcHMvU3RhdGVmdWxTZXQvZGF0YS9wb3N0Z3JlcyA6IHRjcC81NDMy"
+}
