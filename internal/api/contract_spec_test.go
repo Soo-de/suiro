@@ -3,6 +3,7 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"io/fs"
 	"maps"
 	"net/http"
 	"os"
@@ -191,7 +192,7 @@ func compact(v any) string {
 
 func readNote(t *testing.T, name string) []byte {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("testdata", "note", name))
+	data, err := fs.ReadFile(os.DirFS(filepath.Join("testdata", "note")), name)
 	if err != nil {
 		t.Fatal(err)
 	}
