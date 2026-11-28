@@ -1,0 +1,53 @@
+name: np-deny-all-ingress
+oracle: "Kubernetes, Network Policies, Default policies: Default deny all ingress traffic"
+sources:
+- id: shop/app
+  kind: git
+  namespace: default
+  manifests: |
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: default-deny-ingress
+      namespace: default
+    spec:
+      podSelector: {}
+      policyTypes:
+      - Ingress
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: web, namespace: default}
+    spec: {template: {metadata: {labels: {app: web}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: client, namespace: default}
+    spec: {template: {metadata: {labels: {app: client}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: outsider, namespace: other}
+    spec: {template: {metadata: {labels: {app: outsider}}, spec: {containers: [{name: app}]}}}
+  want:
+    workloads:
+    - {key: k8s:apps/Deployment/default/client, kind: k8s:apps/Deployment, namespace: default, name: client, podLabels: {app: client}}
+    - {key: k8s:apps/Deployment/default/web, kind: k8s:apps/Deployment, namespace: default, name: web, podLabels: {app: web}}
+    - {key: k8s:apps/Deployment/other/outsider, kind: k8s:apps/Deployment, namespace: other, name: outsider, podLabels: {app: outsider}}
+    gates:
+    - id: k8s:networking.k8s.io/NetworkPolicy/default/default-deny-ingress#ingress
+      layer: kubernetes
+      type: filter
+      direction: ingress
+      semantics: {stateful: true, isolating: true}
+      target: {pods: {namespace: default, selector: {}}}
+      object: k8s:networking.k8s.io/NetworkPolicy/default/default-deny-ingress
+paths:
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/web : tcp/0-65535", verdict: deny}
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/web : udp/0-65535", verdict: deny}
+- {key: "k8s:apps/Deployment/default/web → k8s:apps/Deployment/default/client : tcp/80", verdict: deny}
+- {key: "k8s:apps/Deployment/other/outsider → k8s:apps/Deployment/default/web : tcp/80", verdict: deny}
+- {key: "internet → k8s:apps/Deployment/default/web : tcp/80", verdict: deny}
+- {key: "external-private → k8s:apps/Deployment/default/web : tcp/80", verdict: deny}
+- {key: "k8s:apps/Deployment/default/web → k8s:apps/Deployment/other/outsider : tcp/0-65535", verdict: allow}
+- {key: "k8s:apps/Deployment/default/web → internet : tcp/443", verdict: allow}

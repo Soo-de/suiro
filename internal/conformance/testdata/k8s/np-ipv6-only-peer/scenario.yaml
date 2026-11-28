@@ -1,0 +1,59 @@
+name: np-ipv6-only-peer
+oracle: "Kubernetes, Network Policies, Behavior of to and from selectors: ipBlock allows its CIDR alone"
+sources:
+- id: shop/app
+  kind: git
+  namespace: default
+  manifests: |
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata: {name: ipv6-only, namespace: default}
+    spec:
+      podSelector: {matchLabels: {app: web}}
+      policyTypes: [Ingress, Egress]
+      ingress:
+      - from: [{ipBlock: {cidr: "2001:db8::/32"}}]
+      egress:
+      - to: [{ipBlock: {cidr: "::/0"}}]
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: web, namespace: default}
+    spec: {template: {metadata: {labels: {app: web}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: client, namespace: default}
+    spec: {template: {metadata: {labels: {app: client}}, spec: {containers: [{name: app}]}}}
+  want:
+    workloads:
+    - {key: k8s:apps/Deployment/default/client, kind: k8s:apps/Deployment, namespace: default, name: client, podLabels: {app: client}}
+    - {key: k8s:apps/Deployment/default/web, kind: k8s:apps/Deployment, namespace: default, name: web, podLabels: {app: web}}
+    gates:
+    - id: k8s:networking.k8s.io/NetworkPolicy/default/ipv6-only#egress
+      layer: kubernetes
+      type: filter
+      direction: egress
+      semantics: {stateful: true, isolating: true}
+      target: {pods: {namespace: default, selector: {matchLabels: {app: web}}}}
+      object: k8s:networking.k8s.io/NetworkPolicy/default/ipv6-only
+    - id: k8s:networking.k8s.io/NetworkPolicy/default/ipv6-only#ingress
+      layer: kubernetes
+      type: filter
+      direction: ingress
+      semantics: {stateful: true, isolating: true}
+      target: {pods: {namespace: default, selector: {matchLabels: {app: web}}}}
+      object: k8s:networking.k8s.io/NetworkPolicy/default/ipv6-only
+    problems:
+    - reason: rule-outside-model
+      subject: k8s:networking.k8s.io/NetworkPolicy/default/ipv6-only
+      origin: {locator: "spec.egress[0]"}
+    - reason: rule-outside-model
+      subject: k8s:networking.k8s.io/NetworkPolicy/default/ipv6-only
+      origin: {locator: "spec.ingress[0]"}
+paths:
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/web : tcp/0-65535", verdict: deny}
+- {key: "internet → k8s:apps/Deployment/default/web : tcp/0-65535", verdict: deny}
+- {key: "external-private → k8s:apps/Deployment/default/web : udp/0-65535", verdict: deny}
+- {key: "k8s:apps/Deployment/default/web → internet : tcp/0-65535", verdict: deny}
+- {key: "k8s:apps/Deployment/default/web → k8s:apps/Deployment/default/client : tcp/0-65535", verdict: deny}

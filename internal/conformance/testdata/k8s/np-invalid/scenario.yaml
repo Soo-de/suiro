@@ -1,0 +1,50 @@
+name: np-invalid
+oracle: "Kubernetes API concepts, Field validation (Strict): an object with an unknown field is rejected"
+sources:
+- id: shop/app
+  kind: git
+  namespace: shop
+  manifests: |
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata: {name: typo, namespace: shop}
+    spec:
+      podSelector: {}
+      ingres:
+      - from: [{podSelector: {}}]
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: web, namespace: shop}
+    spec: {template: {metadata: {labels: {app: web}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: client, namespace: shop}
+    spec: {template: {metadata: {labels: {app: client}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: one, namespace: other}
+    spec: {template: {metadata: {labels: {app: one}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: two, namespace: other}
+    spec: {template: {metadata: {labels: {app: two}}, spec: {containers: [{name: app}]}}}
+  want:
+    workloads:
+    - {key: k8s:apps/Deployment/other/one, kind: k8s:apps/Deployment, namespace: other, name: one, podLabels: {app: one}}
+    - {key: k8s:apps/Deployment/other/two, kind: k8s:apps/Deployment, namespace: other, name: two, podLabels: {app: two}}
+    - {key: k8s:apps/Deployment/shop/client, kind: k8s:apps/Deployment, namespace: shop, name: client, podLabels: {app: client}}
+    - {key: k8s:apps/Deployment/shop/web, kind: k8s:apps/Deployment, namespace: shop, name: web, podLabels: {app: web}}
+    problems:
+    - reason: object-invalid
+      subject: k8s:networking.k8s.io/NetworkPolicy/shop/typo
+      origin: {}
+paths:
+- {key: "k8s:apps/Deployment/shop/client → k8s:apps/Deployment/shop/web : tcp/0-65535", verdict: unknown, reasons: [object-invalid]}
+- {key: "k8s:apps/Deployment/other/one → k8s:apps/Deployment/shop/web : tcp/80", verdict: unknown, reasons: [object-invalid]}
+- {key: "k8s:apps/Deployment/shop/web → k8s:apps/Deployment/other/one : tcp/80", verdict: unknown, reasons: [object-invalid]}
+- {key: "internet → k8s:apps/Deployment/shop/web : tcp/80", verdict: unknown, reasons: [object-invalid]}
+- {key: "k8s:apps/Deployment/other/one → k8s:apps/Deployment/other/two : tcp/0-65535", verdict: allow}

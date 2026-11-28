@@ -1,0 +1,93 @@
+name: np-api-defaults
+oracle: "Kubernetes API reference, NetworkPolicySpec.policyTypes and NetworkPolicyPort.protocol defaults"
+sources:
+- id: shop/app
+  kind: git
+  namespace: default
+  manifests: |
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata: {name: api, namespace: default}
+    spec:
+      podSelector: {matchLabels: {role: api}}
+      ingress:
+      - from: [{podSelector: {matchLabels: {role: web}}}]
+        ports: [{port: 80}]
+      egress:
+      - to: [{podSelector: {matchLabels: {role: db}}}]
+        ports: [{port: 5432}]
+    ---
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata: {name: db, namespace: default}
+    spec:
+      podSelector: {matchLabels: {role: db}}
+      ingress:
+      - from: [{podSelector: {matchLabels: {role: api}}}]
+        ports: [{port: 5432}]
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: api, namespace: default}
+    spec: {template: {metadata: {labels: {role: api}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: db, namespace: default}
+    spec: {template: {metadata: {labels: {role: db}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: web, namespace: default}
+    spec: {template: {metadata: {labels: {role: web}}, spec: {containers: [{name: app}]}}}
+  want:
+    workloads:
+    - {key: k8s:apps/Deployment/default/api, kind: k8s:apps/Deployment, namespace: default, name: api, podLabels: {role: api}}
+    - {key: k8s:apps/Deployment/default/db, kind: k8s:apps/Deployment, namespace: default, name: db, podLabels: {role: db}}
+    - {key: k8s:apps/Deployment/default/web, kind: k8s:apps/Deployment, namespace: default, name: web, podLabels: {role: web}}
+    gates:
+    - id: k8s:networking.k8s.io/NetworkPolicy/default/api#egress
+      layer: kubernetes
+      type: filter
+      direction: egress
+      semantics: {stateful: true, isolating: true}
+      target: {pods: {namespace: default, selector: {matchLabels: {role: api}}}}
+      rules:
+      - action: allow
+        peers: [{pods: {namespace: default, podSelector: {matchLabels: {role: db}}}}]
+        ports: [{protocol: tcp, from: 5432, to: 5432}]
+        origin: {locator: "spec.egress[0]"}
+      object: k8s:networking.k8s.io/NetworkPolicy/default/api
+    - id: k8s:networking.k8s.io/NetworkPolicy/default/api#ingress
+      layer: kubernetes
+      type: filter
+      direction: ingress
+      semantics: {stateful: true, isolating: true}
+      target: {pods: {namespace: default, selector: {matchLabels: {role: api}}}}
+      rules:
+      - action: allow
+        peers: [{pods: {namespace: default, podSelector: {matchLabels: {role: web}}}}]
+        ports: [{protocol: tcp, from: 80, to: 80}]
+        origin: {locator: "spec.ingress[0]"}
+      object: k8s:networking.k8s.io/NetworkPolicy/default/api
+    - id: k8s:networking.k8s.io/NetworkPolicy/default/db#ingress
+      layer: kubernetes
+      type: filter
+      direction: ingress
+      semantics: {stateful: true, isolating: true}
+      target: {pods: {namespace: default, selector: {matchLabels: {role: db}}}}
+      rules:
+      - action: allow
+        peers: [{pods: {namespace: default, podSelector: {matchLabels: {role: api}}}}]
+        ports: [{protocol: tcp, from: 5432, to: 5432}]
+        origin: {locator: "spec.ingress[0]"}
+      object: k8s:networking.k8s.io/NetworkPolicy/default/db
+paths:
+- {key: "k8s:apps/Deployment/default/web → k8s:apps/Deployment/default/api : tcp/80", verdict: allow}
+- {key: "k8s:apps/Deployment/default/web → k8s:apps/Deployment/default/api : udp/80", verdict: deny}
+- {key: "k8s:apps/Deployment/default/api → k8s:apps/Deployment/default/db : tcp/5432", verdict: allow}
+- {key: "k8s:apps/Deployment/default/api → k8s:apps/Deployment/default/db : udp/5432", verdict: deny}
+- {key: "k8s:apps/Deployment/default/api → k8s:apps/Deployment/default/web : tcp/0-65535", verdict: deny}
+- {key: "k8s:apps/Deployment/default/web → k8s:apps/Deployment/default/db : tcp/5432", verdict: deny}
+- {key: "k8s:apps/Deployment/default/db → k8s:apps/Deployment/default/web : tcp/0-65535", verdict: allow}
+- {key: "k8s:apps/Deployment/default/db → internet : tcp/443", verdict: allow}

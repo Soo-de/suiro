@@ -1,0 +1,88 @@
+name: np-named-port
+oracle: "Kubernetes API reference, NetworkPolicyPort.port: a numerical or named port on a pod"
+sources:
+- id: shop/app
+  kind: git
+  namespace: default
+  manifests: |
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata: {name: allow-http, namespace: default}
+    spec:
+      podSelector: {matchLabels: {tier: web}}
+      policyTypes: [Ingress]
+      ingress:
+      - ports:
+        - port: http
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: web, namespace: default}
+    spec:
+      template:
+        metadata: {labels: {tier: web}}
+        spec: {containers: [{name: app, ports: [{name: http, containerPort: 8080}]}]}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: web-alt, namespace: default}
+    spec:
+      template:
+        metadata: {labels: {tier: web}}
+        spec: {containers: [{name: app, ports: [{name: http, containerPort: 8081}]}]}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: web-unnamed, namespace: default}
+    spec:
+      template:
+        metadata: {labels: {tier: web}}
+        spec: {containers: [{name: app, ports: [{containerPort: 8080}]}]}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: client, namespace: default}
+    spec: {template: {metadata: {labels: {tier: client}}, spec: {containers: [{name: app}]}}}
+  want:
+    workloads:
+    - {key: k8s:apps/Deployment/default/client, kind: k8s:apps/Deployment, namespace: default, name: client, podLabels: {tier: client}}
+    - key: k8s:apps/Deployment/default/web
+      kind: k8s:apps/Deployment
+      namespace: default
+      name: web
+      podLabels: {tier: web}
+      ports: [{container: app, name: http, port: 8080, protocol: tcp}]
+    - key: k8s:apps/Deployment/default/web-alt
+      kind: k8s:apps/Deployment
+      namespace: default
+      name: web-alt
+      podLabels: {tier: web}
+      ports: [{container: app, name: http, port: 8081, protocol: tcp}]
+    - key: k8s:apps/Deployment/default/web-unnamed
+      kind: k8s:apps/Deployment
+      namespace: default
+      name: web-unnamed
+      podLabels: {tier: web}
+      ports: [{container: app, port: 8080, protocol: tcp}]
+    gates:
+    - id: k8s:networking.k8s.io/NetworkPolicy/default/allow-http#ingress
+      layer: kubernetes
+      type: filter
+      direction: ingress
+      semantics: {stateful: true, isolating: true}
+      target: {pods: {namespace: default, selector: {matchLabels: {tier: web}}}}
+      rules:
+      - action: allow
+        peers: [{all: true}]
+        namedPorts: [{protocol: tcp, name: http}]
+        origin: {locator: "spec.ingress[0]"}
+      object: k8s:networking.k8s.io/NetworkPolicy/default/allow-http
+paths:
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/web : tcp/8080", verdict: allow}
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/web : tcp/0-8079", verdict: deny}
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/web : tcp/8081-65535", verdict: deny}
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/web : udp/8080", verdict: deny}
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/web-alt : tcp/8081", verdict: allow}
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/web-alt : tcp/8080", verdict: deny}
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/web-unnamed : tcp/0-65535", verdict: deny}
+- {key: "internet → k8s:apps/Deployment/default/web : tcp/8080", verdict: allow}

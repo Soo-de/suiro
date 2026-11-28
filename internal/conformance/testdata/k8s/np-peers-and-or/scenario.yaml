@@ -1,0 +1,130 @@
+name: np-peers-and-or
+oracle: "Kubernetes, Network Policies, Behavior of to and from selectors"
+sources:
+- id: shop/app
+  kind: git
+  namespace: default
+  manifests: |
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata: {name: and-policy, namespace: default}
+    spec:
+      podSelector: {matchLabels: {role: db-and}}
+      policyTypes: [Ingress]
+      ingress:
+      - from:
+        - namespaceSelector:
+            matchLabels:
+              user: alice
+          podSelector:
+            matchLabels:
+              role: client
+    ---
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata: {name: or-policy, namespace: default}
+    spec:
+      podSelector: {matchLabels: {role: db-or}}
+      policyTypes: [Ingress]
+      ingress:
+      - from:
+        - namespaceSelector:
+            matchLabels:
+              user: alice
+        - podSelector:
+            matchLabels:
+              role: client
+    ---
+    apiVersion: v1
+    kind: Namespace
+    metadata: {name: default}
+    ---
+    apiVersion: v1
+    kind: Namespace
+    metadata: {name: alice, labels: {user: alice}}
+    ---
+    apiVersion: v1
+    kind: Namespace
+    metadata: {name: bob, labels: {user: bob}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: db-and, namespace: default}
+    spec: {template: {metadata: {labels: {role: db-and}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: db-or, namespace: default}
+    spec: {template: {metadata: {labels: {role: db-or}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: client, namespace: default}
+    spec: {template: {metadata: {labels: {role: client}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: client, namespace: alice}
+    spec: {template: {metadata: {labels: {role: client}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: other, namespace: alice}
+    spec: {template: {metadata: {labels: {role: other}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: client, namespace: bob}
+    spec: {template: {metadata: {labels: {role: client}}, spec: {containers: [{name: app}]}}}
+  want:
+    namespaces:
+    - {name: alice, labels: {user: alice, kubernetes.io/metadata.name: alice}}
+    - {name: bob, labels: {user: bob, kubernetes.io/metadata.name: bob}}
+    - {name: default, labels: {kubernetes.io/metadata.name: default}}
+    workloads:
+    - {key: k8s:apps/Deployment/alice/client, kind: k8s:apps/Deployment, namespace: alice, name: client, podLabels: {role: client}}
+    - {key: k8s:apps/Deployment/alice/other, kind: k8s:apps/Deployment, namespace: alice, name: other, podLabels: {role: other}}
+    - {key: k8s:apps/Deployment/bob/client, kind: k8s:apps/Deployment, namespace: bob, name: client, podLabels: {role: client}}
+    - {key: k8s:apps/Deployment/default/client, kind: k8s:apps/Deployment, namespace: default, name: client, podLabels: {role: client}}
+    - {key: k8s:apps/Deployment/default/db-and, kind: k8s:apps/Deployment, namespace: default, name: db-and, podLabels: {role: db-and}}
+    - {key: k8s:apps/Deployment/default/db-or, kind: k8s:apps/Deployment, namespace: default, name: db-or, podLabels: {role: db-or}}
+    gates:
+    - id: k8s:networking.k8s.io/NetworkPolicy/default/and-policy#ingress
+      layer: kubernetes
+      type: filter
+      direction: ingress
+      semantics: {stateful: true, isolating: true}
+      target: {pods: {namespace: default, selector: {matchLabels: {role: db-and}}}}
+      rules:
+      - action: allow
+        peers:
+        - pods:
+            namespace: default
+            namespaceSelector: {matchLabels: {user: alice}}
+            podSelector: {matchLabels: {role: client}}
+        ports: [{protocol: all, from: 0, to: 65535}]
+        origin: {locator: "spec.ingress[0]"}
+      object: k8s:networking.k8s.io/NetworkPolicy/default/and-policy
+    - id: k8s:networking.k8s.io/NetworkPolicy/default/or-policy#ingress
+      layer: kubernetes
+      type: filter
+      direction: ingress
+      semantics: {stateful: true, isolating: true}
+      target: {pods: {namespace: default, selector: {matchLabels: {role: db-or}}}}
+      rules:
+      - action: allow
+        peers:
+        - {pods: {namespace: default, namespaceSelector: {matchLabels: {user: alice}}}}
+        - {pods: {namespace: default, podSelector: {matchLabels: {role: client}}}}
+        ports: [{protocol: all, from: 0, to: 65535}]
+        origin: {locator: "spec.ingress[0]"}
+      object: k8s:networking.k8s.io/NetworkPolicy/default/or-policy
+paths:
+- {key: "k8s:apps/Deployment/alice/client → k8s:apps/Deployment/default/db-and : tcp/0-65535", verdict: allow}
+- {key: "k8s:apps/Deployment/alice/other → k8s:apps/Deployment/default/db-and : tcp/0-65535", verdict: deny}
+- {key: "k8s:apps/Deployment/bob/client → k8s:apps/Deployment/default/db-and : tcp/0-65535", verdict: deny}
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/db-and : tcp/0-65535", verdict: deny}
+- {key: "k8s:apps/Deployment/alice/client → k8s:apps/Deployment/default/db-or : tcp/0-65535", verdict: allow}
+- {key: "k8s:apps/Deployment/alice/other → k8s:apps/Deployment/default/db-or : tcp/0-65535", verdict: allow}
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/db-or : tcp/0-65535", verdict: allow}
+- {key: "k8s:apps/Deployment/bob/client → k8s:apps/Deployment/default/db-or : tcp/0-65535", verdict: deny}
