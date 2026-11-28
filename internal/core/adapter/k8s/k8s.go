@@ -93,6 +93,8 @@ func (t *translation) object(o model.Object) {
 		t.service(o)
 	case model.KindNetworkPolicy:
 		t.networkPolicy(o)
+	case model.KindExpectation:
+		t.expectation(o)
 	default:
 		t.unknownKind(o)
 	}
