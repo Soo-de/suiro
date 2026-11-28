@@ -91,6 +91,8 @@ func (t *translation) object(o model.Object) {
 		t.workload(o)
 	case model.KindService:
 		t.service(o)
+	case model.KindNetworkPolicy:
+		t.networkPolicy(o)
 	default:
 		t.unknownKind(o)
 	}
