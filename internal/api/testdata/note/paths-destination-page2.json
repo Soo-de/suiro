@@ -1,0 +1,34 @@
+{
+  "items": [
+    {
+      "key": {
+        "source": "k8s:apps/Deployment/shop/web",
+        "destination": "k8s:apps/StatefulSet/data/postgres",
+        "ports": {
+          "protocol": "tcp",
+          "from": 5432,
+          "to": 5432
+        }
+      },
+      "verdict": "deny",
+      "reasons": [
+        "ipblock-pod-match-unknown"
+      ]
+    },
+    {
+      "key": {
+        "source": "k8s:batch/CronJob/ops/report",
+        "destination": "k8s:apps/StatefulSet/data/postgres",
+        "ports": {
+          "protocol": "tcp",
+          "from": 5432,
+          "to": 5432
+        }
+      },
+      "verdict": "unknown",
+      "reasons": [
+        "ipblock-pod-match-unknown"
+      ]
+    }
+  ]
+}

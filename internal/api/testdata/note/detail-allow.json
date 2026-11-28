@@ -1,0 +1,118 @@
+{
+  "key": {
+    "source": "k8s:apps/Deployment/shop/api",
+    "destination": "k8s:apps/StatefulSet/data/postgres",
+    "ports": {
+      "protocol": "tcp",
+      "from": 5432,
+      "to": 5432
+    }
+  },
+  "verdict": "allow",
+  "classes": [
+    {
+      "pair": {
+        "source": {
+          "name": "cluster",
+          "addresses": [
+            "10.244.0.0/16"
+          ]
+        },
+        "destination": {
+          "name": "cluster",
+          "addresses": [
+            "10.244.0.0/16"
+          ]
+        }
+      },
+      "outcome": "pass",
+      "gates": [
+        {
+          "gate": {
+            "layer": "kubernetes",
+            "type": "transform",
+            "members": [
+              "k8s:core/Service/data/postgres"
+            ],
+            "owners": [
+              {
+                "team": "data",
+                "application": "orders-db"
+              }
+            ]
+          },
+          "outcome": "pass",
+          "mappings": [
+            {
+              "gate": "k8s:core/Service/data/postgres",
+              "mapping": {
+                "name": "pg",
+                "protocol": "tcp",
+                "port": 5432,
+                "targetPort": 5432,
+                "targetPortName": "pg"
+              }
+            }
+          ]
+        },
+        {
+          "gate": {
+            "layer": "kubernetes",
+            "type": "filter",
+            "direction": "egress",
+            "members": [
+              "k8s:networking.k8s.io/NetworkPolicy/shop/api#egress",
+              "k8s:networking.k8s.io/NetworkPolicy/shop/default-deny#egress"
+            ],
+            "owners": [
+              {
+                "team": "shop",
+                "application": "storefront"
+              }
+            ]
+          },
+          "outcome": "pass",
+          "rules": [
+            {
+              "gate": "k8s:networking.k8s.io/NetworkPolicy/shop/api#egress",
+              "origin": {
+                "source": "shop/storefront",
+                "file": "deploy/storefront/netpol-api.yaml",
+                "line": 20,
+                "locator": "spec.egress[0].to[0]"
+              }
+            }
+          ]
+        },
+        {
+          "gate": {
+            "layer": "kubernetes",
+            "type": "filter",
+            "direction": "ingress",
+            "members": [
+              "k8s:networking.k8s.io/NetworkPolicy/data/postgres#ingress"
+            ],
+            "owners": [
+              {
+                "team": "data",
+                "application": "orders-db"
+              }
+            ]
+          },
+          "outcome": "pass",
+          "rules": [
+            {
+              "gate": "k8s:networking.k8s.io/NetworkPolicy/data/postgres#ingress",
+              "origin": {
+                "source": "data/orders-db",
+                "file": "deploy/orders-db/netpol-postgres.yaml",
+                "line": 13,
+                "locator": "spec.ingress[0].from[0]"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

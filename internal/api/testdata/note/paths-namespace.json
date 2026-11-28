@@ -1,0 +1,76 @@
+{
+  "items": [
+    {
+      "key": {
+        "source": "external-private",
+        "destination": "k8s:apps/Deployment/shop/web",
+        "ports": {
+          "protocol": "tcp",
+          "from": 8080,
+          "to": 8080
+        }
+      },
+      "verdict": "allow"
+    },
+    {
+      "key": {
+        "source": "internet",
+        "destination": "k8s:apps/Deployment/shop/web",
+        "ports": {
+          "protocol": "tcp",
+          "from": 8080,
+          "to": 8080
+        }
+      },
+      "verdict": "allow"
+    },
+    {
+      "key": {
+        "source": "k8s:apps/Deployment/shop/api",
+        "destination": "k8s:apps/StatefulSet/data/postgres",
+        "ports": {
+          "protocol": "tcp",
+          "from": 5432,
+          "to": 5432
+        }
+      },
+      "verdict": "allow"
+    },
+    {
+      "key": {
+        "source": "k8s:apps/Deployment/shop/web",
+        "destination": "k8s:apps/Deployment/shop/api",
+        "ports": {
+          "protocol": "tcp",
+          "from": 8080,
+          "to": 8080
+        }
+      },
+      "verdict": "allow"
+    },
+    {
+      "key": {
+        "source": "k8s:apps/StatefulSet/data/postgres",
+        "destination": "k8s:apps/Deployment/shop/web",
+        "ports": {
+          "protocol": "tcp",
+          "from": 8080,
+          "to": 8080
+        }
+      },
+      "verdict": "allow"
+    },
+    {
+      "key": {
+        "source": "k8s:batch/CronJob/ops/report",
+        "destination": "k8s:apps/Deployment/shop/web",
+        "ports": {
+          "protocol": "tcp",
+          "from": 8080,
+          "to": 8080
+        }
+      },
+      "verdict": "allow"
+    }
+  ]
+}

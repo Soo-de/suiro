@@ -1,0 +1,70 @@
+{
+  "id": 43,
+  "kind": "baseline",
+  "environment": "lab",
+  "status": "failed",
+  "createdAt": "2026-12-08T09:31:40Z",
+  "fingerprint": "sha256:6aaa25c64d5c05689d6a4f2654cfaa10af308d01c3f8ca680453a93ba37c670c",
+  "toolVersion": "v0.1.0",
+  "schemaVersion": 1,
+  "algorithmVersion": 1,
+  "ruleSetVersion": 1,
+  "inputs": [
+    {
+      "key": {
+        "source": "data/orders-db"
+      },
+      "revision": "328c417c2d2b6b98df8e48ceb00daac6756b8031",
+      "digest": "sha256:315c4c039989685e5c199df2c0412b430cf4acc1a0da517a4b40647e7cd2aed3"
+    },
+    {
+      "key": {
+        "source": "ops/reports"
+      },
+      "revision": "328c417c2d2b6b98df8e48ceb00daac6756b8031",
+      "digest": "sha256:9eebfb70f7719d6375b3845d4ec8c49aaa902528b18dcbbe0430c27b8db61c08"
+    },
+    {
+      "key": {
+        "source": "shop/storefront"
+      },
+      "revision": "328c417c2d2b6b98df8e48ceb00daac6756b8031",
+      "digest": "sha256:9499069defbdded328fc8ed6cec41f1211540d416123557c514ba228e1bd691a"
+    }
+  ],
+  "profile": {
+    "cni": "calico",
+    "networkPolicyEnforcement": "on",
+    "podCIDRs": [
+      "10.244.0.0/16"
+    ],
+    "sources": {
+      "cni": "admin",
+      "networkPolicyEnforcement": "admin",
+      "podCIDRs": "admin"
+    }
+  },
+  "limits": {
+    "endpoints": 300,
+    "rules": 2000,
+    "prefixesPerEndpoint": 64,
+    "portRangesPerPair": 64,
+    "evaluations": 5000000
+  },
+  "unexamined": [],
+  "endpoints": [],
+  "edges": [],
+  "findings": [],
+  "problems": [
+    {
+      "reason": "analysis-timeout",
+      "subject": "lab",
+      "message": "analysis did not finish within its time budget of 30s"
+    },
+    {
+      "reason": "source-unread",
+      "subject": "ops/alerts",
+      "message": "no complete read yet"
+    }
+  ]
+}
