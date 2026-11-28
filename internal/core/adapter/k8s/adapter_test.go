@@ -198,8 +198,8 @@ func wantProblems(t *testing.T, f model.Fragment, want ...problem) {
 	t.Helper()
 	got := problems(f)
 	if len(got) == len(want) {
-		for i := range got {
-			if want[i].locator == anyLocator {
+		for i, w := range want {
+			if w.locator == anyLocator && i < len(got) {
 				got[i].locator = anyLocator
 			}
 		}

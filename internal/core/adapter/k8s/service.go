@@ -36,11 +36,11 @@ func (t *translation) service(o model.Object) {
 		t.invalid(o, bad)
 		return
 	}
-	switch kind := withDefault(s.Spec.Type, defaultServiceType); {
-	case kind == serviceExternalName:
+	switch withDefault(s.Spec.Type, defaultServiceType) {
+	case serviceExternalName:
 		t.flag(o, model.ReasonServiceSelectsNoPods, "spec.type", "an ExternalName Service maps no pod ports")
 		return
-	case kind == serviceLoadBalancer:
+	case serviceLoadBalancer:
 		t.flag(o, model.ReasonAWSControllerEffect, "spec.type",
 			"the load balancer controller writes rules the model does not see")
 	}
