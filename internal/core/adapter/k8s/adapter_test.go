@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
 	"reflect"
 	"slices"
 	"strings"
@@ -901,4 +902,592 @@ func TestWorkloadWithoutNamespace(t *testing.T) {
 			wantInvalid(t, k8s.New(), doc, "metadata.namespace")
 		})
 	}
+}
+
+// Services. The cases follow the Service concept page, "Defining a Service",
+// "Port definitions", "Multi-port Services" and "Service type".
+
+// service is a manifest of the Service my-service with the given spec.
+func service(spec string) string {
+	return "apiVersion: v1\nkind: Service\nmetadata: {name: my-service, namespace: default}\nspec:\n" + indent(2, spec) + "\n"
+}
+
+// transform is the gate a Service my-service becomes.
+func transform(o model.Object, selector map[string]string, mappings ...model.PortMapping) model.Gate {
+	return model.Gate{
+		ID: model.GateID(o.Key), Layer: model.LayerKubernetes, Type: model.GateTransform,
+		Target:   model.GateTarget{Pods: &model.PodTarget{Namespace: "default", Selector: model.LabelSelector{MatchLabels: selector}}},
+		Mappings: mappings, Object: o.Key, Origin: o.Origin,
+	}
+}
+
+func TestServices(t *testing.T) {
+	tcp, udp := model.ProtocolTCP, model.ProtocolUDP
+	for _, tt := range []struct {
+		name  string
+		ports string
+		want  []model.PortMapping
+	}{
+		{"the documented my-service", "- {protocol: TCP, port: 80, targetPort: 9376}",
+			[]model.PortMapping{{Protocol: tcp, Port: 80, TargetPort: 9376}}},
+		{"omitted protocol and targetPort", "- {port: 80}",
+			[]model.PortMapping{{Protocol: tcp, Port: 80, TargetPort: 80}}},
+		{"named target port", "- {name: name-of-service-port, protocol: TCP, port: 80, targetPort: http-web-svc}",
+			[]model.PortMapping{{Name: "name-of-service-port", Protocol: tcp, Port: 80, TargetPortName: "http-web-svc"}}},
+		{"udp", "- {protocol: UDP, port: 53, targetPort: 5353}",
+			[]model.PortMapping{{Protocol: udp, Port: 53, TargetPort: 5353}}},
+		{"multi-port, in written order",
+			"- {name: https, protocol: TCP, port: 443, targetPort: 9377}\n- {name: http, protocol: TCP, port: 80, targetPort: 9376}",
+			[]model.PortMapping{{Name: "https", Protocol: tcp, Port: 443, TargetPort: 9377}, {Name: "http", Protocol: tcp, Port: 80, TargetPort: 9376}}},
+		{"one port number on two protocols",
+			"- {name: dns, port: 53}\n- {name: dns-udp, port: 53, protocol: UDP}",
+			[]model.PortMapping{{Name: "dns", Protocol: tcp, Port: 53, TargetPort: 53}, {Name: "dns-udp", Protocol: udp, Port: 53, TargetPort: 53}}},
+		{"an SCTP port is dropped",
+			"- {name: sctp, port: 7, protocol: SCTP}\n- {name: http, port: 80}",
+			[]model.PortMapping{{Name: "http", Protocol: tcp, Port: 80, TargetPort: 80}}},
+		{"highest ports", "- {port: 65535, targetPort: 65535}",
+			[]model.PortMapping{{Protocol: tcp, Port: 65535, TargetPort: 65535}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s, f := git(t, service("selector: {app.kubernetes.io/name: MyApp}\nports:\n"+tt.ports))
+			want := transform(only(t, s), map[string]string{"app.kubernetes.io/name": "MyApp"}, tt.want...)
+			same(t, "fragment", f, model.Fragment{Source: source, Gates: []model.Gate{want}})
+		})
+	}
+}
+
+// A Service whose every port is SCTP keeps its gate.
+func TestServiceOnlySCTP(t *testing.T) {
+	s, f := git(t, service("selector: {app: a}\nports: [{port: 7, protocol: SCTP}]"))
+	want := transform(only(t, s), map[string]string{"app": "a"})
+	same(t, "fragment", f, model.Fragment{Source: source, Gates: []model.Gate{want}})
+}
+
+func TestServiceTypes(t *testing.T) {
+	for _, tt := range []struct {
+		kind         string
+		loadBalancer bool
+	}{
+		{"ClusterIP", false},
+		{"NodePort", false},
+		{"LoadBalancer", true},
+	} {
+		t.Run(tt.kind, func(t *testing.T) {
+			s, f := git(t, service("type: "+tt.kind+"\nselector: {app: a}\nports: [{port: 80}]"))
+			o := only(t, s)
+			want := transform(o, map[string]string{"app": "a"},
+				model.PortMapping{Protocol: model.ProtocolTCP, Port: 80, TargetPort: 80})
+			same(t, "gates", f.Gates, []model.Gate{want})
+			if tt.loadBalancer {
+				wantProblems(t, f, problem{model.ReasonAWSControllerEffect, o.Key, "spec.type"})
+			} else {
+				wantProblems(t, f)
+			}
+		})
+	}
+}
+
+const reasonSelectsNoPods = model.ReasonCode("service-selects-no-pods")
+
+func TestServiceSelectsNoPods(t *testing.T) {
+	for name, spec := range map[string]string{
+		"ExternalName":                 "type: ExternalName\nexternalName: my.database.example.com",
+		"ExternalName with a selector": "type: ExternalName\nexternalName: my.database.example.com\nselector: {app: a}\nports: [{port: 80}]",
+		"without selector":             "ports: [{protocol: TCP, port: 80, targetPort: 9376}]",
+		"empty selector":               "selector: {}\nports: [{port: 80}]",
+	} {
+		t.Run(name, func(t *testing.T) {
+			s, f := git(t, service(spec))
+			wantEmptyModel(t, f)
+			wantProblems(t, f, problem{reasonSelectsNoPods, only(t, s).Key, anyLocator})
+		})
+	}
+}
+
+func TestServiceSelectsNoPodsReason(t *testing.T) {
+	spec, ok := model.Reasons()[reasonSelectsNoPods]
+	if !ok {
+		t.Fatalf("no row for %q", reasonSelectsNoPods)
+	}
+	want := model.ReasonSpec{Level: model.LevelWarning, Scope: model.ScopeNone, RaisedBy: []model.Producer{model.ProducerAdapter}}
+	if !reflect.DeepEqual(spec, want) {
+		t.Errorf("row %+v, want %+v", spec, want)
+	}
+}
+
+func TestInvalidServices(t *testing.T) {
+	ports := func(p string) string { return "selector: {app: a}\nports: [" + p + "]" }
+	for _, tt := range []struct {
+		name, spec, path string
+	}{
+		{"unknown type", "type: Foo\nselector: {app: a}\nports: [{port: 80}]", "spec.type"},
+		{"port 0", ports("{port: 0}"), "spec.ports[0]"},
+		{"no port", ports("{targetPort: 80}"), "spec.ports[0]"},
+		{"port 65536", ports("{port: 65536}"), "spec.ports[0]"},
+		{"first of two ports unnamed", ports("{port: 80}, {name: b, port: 81}"), "spec.ports[0]"},
+		{"second of two ports unnamed", ports("{name: a, port: 80}, {port: 81}"), "spec.ports[1]"},
+		{"duplicate names", ports("{name: a, port: 80}, {name: a, port: 81}"), "spec.ports[1]"},
+		{"duplicate port and protocol", ports("{name: a, port: 80}, {name: b, port: 80, protocol: TCP}"), "spec.ports[1]"},
+		{"name Web_1", ports("{name: Web_1, port: 80}"), "spec.ports[0]"},
+		{"targetPort 70000", ports("{port: 80, targetPort: 70000}"), "spec.ports[0]"},
+		{"targetPort as a quoted number", ports(`{port: 80, targetPort: "8080"}`), "spec.ports[0]"},
+		{"protocol in lower case", ports("{port: 80, protocol: tcp}"), "spec.ports[0]"},
+		{"selector label key", "selector: {\"-x\": a}\nports: [{port: 80}]", "spec.selector"},
+		{"selector label value", "selector: {app: \"a b\"}\nports: [{port: 80}]", "spec.selector"},
+		// A LoadBalancer would raise a problem of its own on a valid object.
+		{"invalid LoadBalancer", "type: LoadBalancer\nselector: {app: a}\nports: [{port: 0}]", "spec.ports[0]"},
+		{"invalid without selector", "ports: [{port: 0}]", "spec.ports[0]"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			wantInvalid(t, k8s.New(), service(tt.spec), tt.path)
+		})
+	}
+}
+
+// Network policies. The cases follow the Network Policies concept page and
+// the NetworkPolicy API reference.
+
+// netpol is a manifest of the NetworkPolicy p in default with the given spec.
+func netpol(spec string) string {
+	return "apiVersion: networking.k8s.io/v1\nkind: NetworkPolicy\nmetadata: {name: p, namespace: default}\nspec:\n" + indent(2, spec) + "\n"
+}
+
+// filter is the gate of one direction of the policy o, in default.
+func filter(o model.Object, d model.Direction, selector model.LabelSelector, rules ...model.Rule) model.Gate {
+	return model.Gate{
+		ID: model.NewGateID(o.Key, d), Layer: model.LayerKubernetes, Type: model.GateFilter, Direction: d,
+		Semantics: model.FilterSemantics{Stateful: true, Isolating: true},
+		Target:    model.GateTarget{Pods: &model.PodTarget{Namespace: "default", Selector: selector}},
+		Rules:     rules, Object: o.Key, Origin: o.Origin,
+	}
+}
+
+// rule is the allow rule o holds at locator.
+func rule(o model.Object, locator string, peers []model.Peer, ports []model.PortRange, named ...model.NamedPort) model.Rule {
+	return model.Rule{Action: model.ActionAllow, Peers: peers, Ports: ports, NamedPorts: named, Origin: at(o, locator)}
+}
+
+var (
+	allPeers = []model.Peer{{All: true}}
+	allPorts = []model.PortRange{model.AllPorts()}
+)
+
+func tcpPorts(from, to uint16) model.PortRange {
+	return model.PortRange{Protocol: model.ProtocolTCP, From: from, To: to}
+}
+
+func udpPorts(from, to uint16) model.PortRange {
+	return model.PortRange{Protocol: model.ProtocolUDP, From: from, To: to}
+}
+
+func labels(key, value string) *model.LabelSelector {
+	return &model.LabelSelector{MatchLabels: map[string]string{key: value}}
+}
+
+func block(cidr string, except ...string) model.Peer {
+	p := model.Peer{Prefix: netip.MustParsePrefix(cidr)}
+	for _, e := range except {
+		p.Except = append(p.Except, netip.MustParsePrefix(e))
+	}
+	return p
+}
+
+func podPeer(namespaceSelector, podSelector *model.LabelSelector) model.Peer {
+	return model.Peer{Pods: &model.PodPeer{Namespace: "default", NamespaceSelector: namespaceSelector, PodSelector: podSelector}}
+}
+
+// The example policy of the concept page, "The NetworkPolicy resource".
+func TestNetworkPolicyDocumentationExample(t *testing.T) {
+	s, f := git(t, netpol(`
+podSelector:
+  matchLabels:
+    role: db
+policyTypes:
+- Ingress
+- Egress
+ingress:
+- from:
+  - ipBlock:
+      cidr: 172.17.0.0/16
+      except:
+      - 172.17.1.0/24
+  - namespaceSelector:
+      matchLabels:
+        project: myproject
+  - podSelector:
+      matchLabels:
+        role: frontend
+  ports:
+  - protocol: TCP
+    port: 6379
+egress:
+- to:
+  - ipBlock:
+      cidr: 10.0.0.0/24
+  ports:
+  - protocol: TCP
+    port: 5978
+`))
+	o := only(t, s)
+	selector := *labels("role", "db")
+	egress := filter(o, model.Egress, selector,
+		rule(o, "spec.egress[0]", []model.Peer{block("10.0.0.0/24")}, []model.PortRange{tcpPorts(5978, 5978)}))
+	ingress := filter(o, model.Ingress, selector,
+		rule(o, "spec.ingress[0]", []model.Peer{
+			block("172.17.0.0/16", "172.17.1.0/24"),
+			podPeer(labels("project", "myproject"), nil),
+			podPeer(nil, labels("role", "frontend")),
+		}, []model.PortRange{tcpPorts(6379, 6379)}))
+	same(t, "fragment", f, model.Fragment{Source: source, Gates: []model.Gate{egress, ingress}})
+}
+
+func TestNetworkPolicyDirections(t *testing.T) {
+	in, out := model.Ingress, model.Egress
+	// gates maps each direction wanted to its number of rules.
+	for _, tt := range []struct {
+		name  string
+		spec  string
+		gates map[model.Direction]int
+	}{
+		{"nothing written", "podSelector: {}", map[model.Direction]int{in: 0}},
+		{"omitted, egress rule", "podSelector: {}\negress: [{}]", map[model.Direction]int{in: 0, out: 1}},
+		{"omitted, ingress and egress rules", "podSelector: {}\ningress: [{}]\negress: [{}]", map[model.Direction]int{in: 1, out: 1}},
+		{"omitted, ingress rule", "podSelector: {}\ningress: [{}]", map[model.Direction]int{in: 1}},
+		{"omitted, empty egress", "podSelector: {}\negress: []", map[model.Direction]int{in: 0}},
+		{"Ingress with egress rules", "podSelector: {}\npolicyTypes: [Ingress]\negress: [{}]", map[model.Direction]int{in: 0}},
+		{"Ingress with no ingress", "podSelector: {}\npolicyTypes: [Ingress]", map[model.Direction]int{in: 0}},
+		{"Egress alone", "podSelector: {}\npolicyTypes: [Egress]", map[model.Direction]int{out: 0}},
+		{"Egress with ingress rules", "podSelector: {}\npolicyTypes: [Egress]\ningress: [{}]", map[model.Direction]int{out: 0}},
+		{"Ingress twice", "podSelector: {}\npolicyTypes: [Ingress, Ingress]", map[model.Direction]int{in: 0}},
+		{"both", "podSelector: {}\npolicyTypes: [Egress, Ingress]", map[model.Direction]int{in: 0, out: 0}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s, f := git(t, netpol(tt.spec))
+			o := only(t, s)
+			var want []model.Gate
+			for _, d := range []model.Direction{out, in} {
+				n, ok := tt.gates[d]
+				if !ok {
+					continue
+				}
+				g := filter(o, d, model.LabelSelector{})
+				for i := range n {
+					g.Rules = append(g.Rules, rule(o, fmt.Sprintf("spec.%s[%d]", d, i), allPeers, allPorts))
+				}
+				want = append(want, g)
+			}
+			same(t, "fragment", f, model.Fragment{Source: source, Gates: want})
+		})
+	}
+}
+
+func TestNetworkPolicyPodSelector(t *testing.T) {
+	s, f := git(t, netpol(`
+podSelector:
+  matchLabels: {app: web}
+  matchExpressions:
+  - {key: tier, operator: In, values: [b, a]}
+  - {key: env, operator: NotIn, values: [dev]}
+  - {key: team, operator: Exists}
+  - {key: legacy, operator: DoesNotExist}
+`))
+	want := filter(only(t, s), model.Ingress, model.LabelSelector{
+		MatchLabels: map[string]string{"app": "web"},
+		MatchExpressions: []model.LabelRequirement{
+			{Key: "tier", Operator: "In", Values: []string{"b", "a"}},
+			{Key: "env", Operator: "NotIn", Values: []string{"dev"}},
+			{Key: "team", Operator: "Exists"},
+			{Key: "legacy", Operator: "DoesNotExist"},
+		},
+	})
+	same(t, "gates", f.Gates, []model.Gate{want})
+}
+
+// directions runs check on one rule written as an ingress and as an egress
+// rule; far is the name of the rule's peer list.
+func directions(t *testing.T, check func(t *testing.T, d model.Direction, far string)) {
+	t.Helper()
+	t.Run("ingress", func(t *testing.T) { check(t, model.Ingress, "from") })
+	t.Run("egress", func(t *testing.T) { check(t, model.Egress, "to") })
+}
+
+// ruleSpec writes a policy of direction d alone with the given rules, each a
+// flow mapping.
+func ruleSpec(d model.Direction, rules ...string) string {
+	kind := map[model.Direction]string{model.Ingress: "Ingress", model.Egress: "Egress"}[d]
+	spec := "podSelector: {}\npolicyTypes: [" + kind + "]\n" + string(d) + ":"
+	for _, r := range rules {
+		spec += "\n- " + r
+	}
+	return netpol(spec)
+}
+
+// oneRule checks that a policy with one rule yields one gate holding exactly
+// that rule with the given peers and ports, and no problem.
+func oneRule(t *testing.T, d model.Direction, written string, peers []model.Peer, ports []model.PortRange, named ...model.NamedPort) {
+	t.Helper()
+	s, f := git(t, ruleSpec(d, written))
+	o := only(t, s)
+	want := filter(o, d, model.LabelSelector{}, rule(o, fmt.Sprintf("spec.%s[0]", d), peers, ports, named...))
+	same(t, "fragment", f, model.Fragment{Source: source, Gates: []model.Gate{want}})
+}
+
+func TestNetworkPolicyPeers(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		// peers is the rule's from or to list; "" leaves it unwritten.
+		peers string
+		want  []model.Peer
+	}{
+		{"unwritten", "", allPeers},
+		{"empty", "[]", allPeers},
+		{"pod selector", "[{podSelector: {matchLabels: {role: client}}}]",
+			[]model.Peer{podPeer(nil, labels("role", "client"))}},
+		{"namespace selector", "[{namespaceSelector: {matchLabels: {user: alice}}}]",
+			[]model.Peer{podPeer(labels("user", "alice"), nil)}},
+		{"both in one element", "[{namespaceSelector: {matchLabels: {user: alice}}, podSelector: {matchLabels: {role: client}}}]",
+			[]model.Peer{podPeer(labels("user", "alice"), labels("role", "client"))}},
+		{"two elements", "[{namespaceSelector: {matchLabels: {user: alice}}}, {podSelector: {matchLabels: {role: client}}}]",
+			[]model.Peer{podPeer(labels("user", "alice"), nil), podPeer(nil, labels("role", "client"))}},
+		{"every namespace", "[{namespaceSelector: {}}]", []model.Peer{podPeer(&model.LabelSelector{}, nil)}},
+		{"every pod of the namespace", "[{podSelector: {}}]", []model.Peer{podPeer(nil, &model.LabelSelector{})}},
+		{"ipBlock with except", "[{ipBlock: {cidr: 172.17.0.0/16, except: [172.17.1.0/24]}}]",
+			[]model.Peer{block("172.17.0.0/16", "172.17.1.0/24")}},
+		{"ipBlock is masked", "[{ipBlock: {cidr: 10.0.0.1/24, except: [10.0.0.65/26, 10.0.0.200/32]}}]",
+			[]model.Peer{block("10.0.0.0/24", "10.0.0.64/26", "10.0.0.200/32")}},
+		{"every address", "[{ipBlock: {cidr: 0.0.0.0/0}}]", []model.Peer{block("0.0.0.0/0")}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			directions(t, func(t *testing.T, d model.Direction, far string) {
+				written := "{}"
+				if tt.peers != "" {
+					written = "{" + far + ": " + tt.peers + "}"
+				}
+				oneRule(t, d, written, tt.want, allPorts)
+			})
+		})
+	}
+}
+
+func TestNetworkPolicyPorts(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		// ports is the rule's ports list; "" leaves it unwritten.
+		ports string
+		want  []model.PortRange
+		named []model.NamedPort
+	}{
+		{"unwritten", "", allPorts, nil},
+		{"empty", "[]", allPorts, nil},
+		{"a number", "[{port: 6379}]", []model.PortRange{tcpPorts(6379, 6379)}, nil},
+		{"udp", "[{protocol: UDP, port: 53}]", []model.PortRange{udpPorts(53, 53)}, nil},
+		{"range", "[{port: 32000, endPort: 32768}]", []model.PortRange{tcpPorts(32000, 32768)}, nil},
+		{"udp range to the last port", "[{protocol: UDP, port: 1, endPort: 65535}]", []model.PortRange{udpPorts(1, 65535)}, nil},
+		{"endPort equal to port", "[{port: 80, endPort: 80}]", []model.PortRange{tcpPorts(80, 80)}, nil},
+		{"protocol alone", "[{protocol: UDP}]", []model.PortRange{udpPorts(0, 65535)}, nil},
+		{"empty element", "[{}]", []model.PortRange{tcpPorts(0, 65535)}, nil},
+		{"written order", "[{port: 443}, {protocol: UDP, port: 53}, {port: 80}]",
+			[]model.PortRange{tcpPorts(443, 443), udpPorts(53, 53), tcpPorts(80, 80)}, nil},
+		{"named", "[{port: http}]", nil, []model.NamedPort{{Protocol: model.ProtocolTCP, Name: "http"}}},
+		{"named and numbered", "[{protocol: UDP, port: dns}, {port: 80}, {port: web}]",
+			[]model.PortRange{tcpPorts(80, 80)},
+			[]model.NamedPort{{Protocol: model.ProtocolUDP, Name: "dns"}, {Protocol: model.ProtocolTCP, Name: "web"}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			directions(t, func(t *testing.T, d model.Direction, _ string) {
+				written := "{}"
+				if tt.ports != "" {
+					written = "{ports: " + tt.ports + "}"
+				}
+				oneRule(t, d, written, allPeers, tt.want, tt.named...)
+			})
+		})
+	}
+}
+
+func TestNetworkPolicyRuleOrder(t *testing.T) {
+	directions(t, func(t *testing.T, d model.Direction, _ string) {
+		s, f := git(t, ruleSpec(d, "{ports: [{port: 443}]}", "{ports: [{port: 22}]}", "{}"))
+		o := only(t, s)
+		locator := func(i int) string { return fmt.Sprintf("spec.%s[%d]", d, i) }
+		want := filter(o, d, model.LabelSelector{},
+			rule(o, locator(0), allPeers, []model.PortRange{tcpPorts(443, 443)}),
+			rule(o, locator(1), allPeers, []model.PortRange{tcpPorts(22, 22)}),
+			rule(o, locator(2), allPeers, allPorts))
+		same(t, "gates", f.Gates, []model.Gate{want})
+	})
+}
+
+// A rule whose peer or port list dropping empties is dropped whole; it never
+// becomes a rule for every peer or port.
+func TestNetworkPolicyDroppedRules(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		// rule holds FAR where "from" or "to" belongs.
+		rule string
+	}{
+		{"only an SCTP port", "{ports: [{protocol: SCTP, port: 7}]}"},
+		{"only SCTP with no port", "{ports: [{protocol: SCTP}]}"},
+		{"only SCTP ports, one named", "{ports: [{protocol: SCTP, port: diameter}, {protocol: SCTP, port: 7, endPort: 9}]}"},
+		{"only SCTP, with a peer", "{FAR: [{podSelector: {}}], ports: [{protocol: SCTP, port: 7}]}"},
+		{"only an IPv6 peer", `{FAR: [{ipBlock: {cidr: "2001:db8::/32"}}]}`},
+		{"only IPv6 peers, with a port",
+			`{FAR: [{ipBlock: {cidr: "2001:db8::/32", except: ["2001:db8:1::/48"]}}, {ipBlock: {cidr: "::/0"}}], ports: [{port: 80}]}`},
+		{"only an IPv4-mapped peer", `{FAR: [{ipBlock: {cidr: "::ffff:10.0.0.0/104"}}]}`},
+		{"both lists emptied", `{FAR: [{ipBlock: {cidr: "2001:db8::/32"}}], ports: [{protocol: SCTP, port: 7}]}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			directions(t, func(t *testing.T, d model.Direction, far string) {
+				dropped := strings.ReplaceAll(tt.rule, "FAR", far)
+				locator := func(i int) string { return fmt.Sprintf("spec.%s[%d]", d, i) }
+
+				s, f := git(t, ruleSpec(d, dropped))
+				o := only(t, s)
+				same(t, "gates", f.Gates, []model.Gate{filter(o, d, model.LabelSelector{})})
+				wantProblems(t, f, problem{model.ReasonRuleOutsideModel, o.Key, locator(0)})
+
+				// The rules around it stay, at their written places.
+				s, f = git(t, ruleSpec(d, "{ports: [{port: 80}]}", dropped, "{ports: [{port: 81}]}"))
+				o = only(t, s)
+				want := filter(o, d, model.LabelSelector{},
+					rule(o, locator(0), allPeers, []model.PortRange{tcpPorts(80, 80)}),
+					rule(o, locator(2), allPeers, []model.PortRange{tcpPorts(81, 81)}))
+				same(t, "gates", f.Gates, []model.Gate{want})
+				wantProblems(t, f, problem{model.ReasonRuleOutsideModel, o.Key, locator(1)})
+			})
+		})
+	}
+}
+
+func TestNetworkPolicyEveryRuleDropped(t *testing.T) {
+	s, f := git(t, netpol(`
+podSelector: {}
+ingress:
+- ports: [{protocol: SCTP, port: 7}]
+egress:
+- to: [{ipBlock: {cidr: "fd00::/8"}}]
+`))
+	o := only(t, s)
+	same(t, "gates", f.Gates, []model.Gate{
+		filter(o, model.Egress, model.LabelSelector{}),
+		filter(o, model.Ingress, model.LabelSelector{}),
+	})
+	wantProblems(t, f,
+		problem{model.ReasonRuleOutsideModel, o.Key, "spec.egress[0]"},
+		problem{model.ReasonRuleOutsideModel, o.Key, "spec.ingress[0]"})
+}
+
+func TestNetworkPolicyMixedRule(t *testing.T) {
+	directions(t, func(t *testing.T, d model.Direction, far string) {
+		written := "{" + far + `: [{ipBlock: {cidr: "2001:db8::/32"}}, {ipBlock: {cidr: 10.0.0.0/8}},` +
+			` {ipBlock: {cidr: "::ffff:10.0.0.0/104"}}, {podSelector: {}}],` +
+			" ports: [{protocol: SCTP, port: 7}, {port: 80}, {protocol: SCTP, port: diameter}, {protocol: UDP, port: 53}]}"
+		oneRule(t, d, written,
+			[]model.Peer{block("10.0.0.0/8"), podPeer(nil, &model.LabelSelector{})},
+			[]model.PortRange{tcpPorts(80, 80), udpPorts(53, 53)})
+	})
+}
+
+// A named port alone keeps a rule whose SCTP ports are dropped.
+func TestNetworkPolicyNamedPortBesideSCTP(t *testing.T) {
+	oneRule(t, model.Ingress, "{ports: [{protocol: SCTP, port: 7}, {port: http}]}", allPeers, nil,
+		model.NamedPort{Protocol: model.ProtocolTCP, Name: "http"})
+}
+
+func TestInvalidNetworkPolicies(t *testing.T) {
+	peer := func(p string) string { return "podSelector: {}\ningress: [{from: [" + p + "]}]" }
+	port := func(p string) string { return "podSelector: {}\ningress: [{ports: [" + p + "]}]" }
+	selector := func(e string) string { return "podSelector: {matchExpressions: [" + e + "]}" }
+	const from, ports = "spec.ingress[0].from[0]", "spec.ingress[0].ports[0]"
+	for _, tt := range []struct {
+		name, spec, path string
+	}{
+		{"cidr prefix too long", peer("{ipBlock: {cidr: 10.0.0.0/33}}"), from},
+		{"cidr without a prefix length", peer("{ipBlock: {cidr: 10.0.0.1}}"), from},
+		{"cidr that is no address", peer("{ipBlock: {cidr: x}}"), from},
+		{"no cidr", peer("{ipBlock: {}}"), from},
+		{"except outside cidr", peer("{ipBlock: {cidr: 10.0.0.0/24, except: [10.0.1.0/28]}}"), from},
+		{"except wider than cidr", peer("{ipBlock: {cidr: 10.0.0.0/24, except: [10.0.0.0/16]}}"), from},
+		{"except equal to cidr", peer("{ipBlock: {cidr: 10.0.0.0/24, except: [10.0.0.0/24]}}"), from},
+		{"except that does not parse", peer("{ipBlock: {cidr: 10.0.0.0/24, except: [x]}}"), from},
+		{"IPv6 except under IPv4", peer(`{ipBlock: {cidr: 10.0.0.0/24, except: ["2001:db8::/64"]}}`), from},
+		{"endPort below port", port("{port: 100, endPort: 99}"), ports},
+		{"endPort with a named port", port("{port: http, endPort: 90}"), ports},
+		{"endPort without a port", port("{endPort: 90}"), ports},
+		{"endPort 65536", port("{port: 1, endPort: 65536}"), ports},
+		{"port 0", port("{port: 0}"), ports},
+		{"port 65536", port("{port: 65536}"), ports},
+		{"port name in upper case", port("{port: HTTP}"), ports},
+		{"protocol in lower case", port("{protocol: tcp, port: 80}"), ports},
+		{"protocol ICMP", port("{protocol: ICMP}"), ports},
+		{"unknown operator", selector("{key: a, operator: Equals, values: [b]}"), "spec.podSelector"},
+		{"In without values", selector("{key: a, operator: In}"), "spec.podSelector"},
+		{"NotIn with empty values", selector("{key: a, operator: NotIn, values: []}"), "spec.podSelector"},
+		{"Exists with values", selector("{key: a, operator: Exists, values: [b]}"), "spec.podSelector"},
+		{"DoesNotExist with values", selector("{key: a, operator: DoesNotExist, values: [b]}"), "spec.podSelector"},
+		{"selector label key", "podSelector: {matchLabels: {\"-x\": a}}", "spec.podSelector"},
+		{"peer selector operator", peer("{podSelector: {matchExpressions: [{key: a, operator: Equals}]}}"), from},
+		{"namespace selector label", peer("{namespaceSelector: {matchLabels: {a: \"b c\"}}}"), from},
+		{"empty peer", peer("{}"), from},
+		{"ipBlock with podSelector", peer("{ipBlock: {cidr: 10.0.0.0/8}, podSelector: {}}"), from},
+		{"ipBlock with namespaceSelector", peer("{ipBlock: {cidr: 10.0.0.0/8}, namespaceSelector: {}}"), from},
+		{"policyTypes in lower case", "podSelector: {}\npolicyTypes: [ingress]", "spec.policyTypes"},
+		{"three policyTypes", "podSelector: {}\npolicyTypes: [Ingress, Egress, Ingress]", "spec.policyTypes"},
+		{"invalid egress rule outside policyTypes",
+			"podSelector: {}\npolicyTypes: [Ingress]\negress: [{ports: [{port: 0}]}]", "spec.egress[0].ports[0]"},
+		{"invalid ingress rule outside policyTypes", "podSelector: {}\npolicyTypes: [Egress]\ningress: [{from: [{}]}]", from},
+		{"invalid beside a dropped rule",
+			"podSelector: {}\ningress: [{ports: [{protocol: SCTP}]}, {ports: [{port: 0}]}]", "spec.ingress[1].ports[0]"},
+		{"invalid port of a dropped protocol", port("{protocol: SCTP, port: 0}"), ports},
+		{"invalid after a valid rule",
+			"podSelector: {}\ningress: [{}, {from: [{podSelector: {}}, {}]}]", "spec.ingress[1].from[1]"},
+		// The first field in walk order: podSelector, ingress, egress, policyTypes.
+		{"podSelector before ingress",
+			"podSelector: {matchExpressions: [{key: a, operator: Equals}]}\ningress: [{from: [{}]}]", "spec.podSelector"},
+		{"first of two ingress rules",
+			"podSelector: {}\ningress: [{ports: [{port: 0}]}, {from: [{ipBlock: {cidr: x}}]}]", ports},
+		{"ingress before egress", "podSelector: {}\negress: [{to: [{}]}]\ningress: [{from: [{}]}]", from},
+		{"egress before policyTypes",
+			"podSelector: {}\npolicyTypes: [ingress]\negress: [{to: [{}]}]", "spec.egress[0].to[0]"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			wantInvalid(t, k8s.New(), netpol(tt.spec), tt.path)
+		})
+	}
+}
+
+// A body that does not decode into the API type is rejected as a whole, as
+// strict field validation does.
+func TestUndecodableNetworkPolicy(t *testing.T) {
+	t.Run("unknown field", func(t *testing.T) {
+		s, f := git(t, netpol("podSelector: {}\ningres: [{}]"))
+		wantEmptyModel(t, f)
+		wantProblems(t, f, problem{model.ReasonObjectInvalid, only(t, s).Key, ""})
+	})
+	for name, spec := range map[string]string{
+		"ingress that is no list": "podSelector: {}\ningress: {}",
+		"cidr that is no string":  "podSelector: {}\ningress: [{from: [{ipBlock: {cidr: 10}}]}]",
+	} {
+		t.Run(name, func(t *testing.T) {
+			s, f := git(t, netpol(spec))
+			wantEmptyModel(t, f)
+			wantProblems(t, f, problem{model.ReasonObjectInvalid, only(t, s).Key, anyLocator})
+		})
+	}
+}
+
+func TestInvalidPolicyKeepsTheOthers(t *testing.T) {
+	s, f := git(t, `
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: a-bad, namespace: default}
+spec: {podSelector: {}, ingress: [{from: [{}]}]}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: b-good, namespace: default}
+spec: {podSelector: {}}
+`)
+	same(t, "gates", f.Gates, []model.Gate{filter(s.Objects[1], model.Ingress, model.LabelSelector{})})
+	wantProblems(t, f, problem{model.ReasonObjectInvalid, s.Objects[0].Key, anyLocator})
 }
