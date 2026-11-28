@@ -2,10 +2,8 @@ package k8s
 
 import (
 	"fmt"
-	"maps"
 	"net/netip"
 	"regexp"
-	"slices"
 	"strings"
 
 	"github.com/Soo-de/suiro/internal/model"
@@ -80,9 +78,9 @@ func validProtocol(protocol string) bool {
 
 // checkLabels checks a map of labels; the API names the map, not the key.
 func checkLabels(labels map[string]string, locator string) string {
-	// Order does not matter: every failure has the same locator.
-	for _, key := range slices.Collect(maps.Keys(labels)) {
-		if !validLabelKey(key) || !validLabelValue(labels[key]) {
+	// Map order does not matter: every failure has the same locator.
+	for key, value := range labels {
+		if !validLabelKey(key) || !validLabelValue(value) {
 			return locator
 		}
 	}
