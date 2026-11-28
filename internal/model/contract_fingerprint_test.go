@@ -235,6 +235,17 @@ func TestComputeFingerprintNilAndEmpty(t *testing.T) {
 			if a != b {
 				t.Errorf("nil gives %s, empty %s", a, b)
 			}
+			// DeepEqual tells a nil list from an empty one.
+			for _, operand := range []struct {
+				got   model.Bundle
+				empty bool
+			}{{withNil, false}, {withEmpty, true}} {
+				want := fingerprintBundle()
+				tt.set(&want, operand.empty)
+				if !reflect.DeepEqual(operand.got, want) {
+					t.Errorf("ComputeFingerprint changed its Bundle:\ngot  %#v\nwant %#v", operand.got, want)
+				}
+			}
 		})
 	}
 }
@@ -395,17 +406,45 @@ func TestComputeFingerprintLeavesOperands(t *testing.T) {
 		slices.Reverse(b.UsedNamespaces["payments/api"])
 		return b
 	}
-	b, l := unsorted(), fingerprintLimits()
-	first := mustFingerprint(t, b, l)
-	if want := unsorted(); !reflect.DeepEqual(b, want) {
-		t.Errorf("ComputeFingerprint changed its Bundle:\ngot  %+v\nwant %+v", b, want)
+	nilLists := func() model.Bundle {
+		b := fingerprintBundle()
+		b.Sources[0].KeptTagKeys = nil
+		b.Sources[2].Git.Helm.ValueFiles = nil
+		b.Sources[2].Git.Helm.Parameters = nil
+		b.Snapshots[0].Objects, b.Snapshots[0].Problems = nil, nil
+		b.UsedNamespaces["payments/api"] = nil
+		b.Profile.ExcludeSNATCIDRs, b.Profile.PodCIDRs, b.Profile.NotInternet = nil, nil, nil
+		b.Profile.NodeGroups[0].Subnets, b.Profile.NodeGroups[0].SecurityGroups = nil, nil
+		b.Profile.PrivateNetworks[0].Prefixes = nil
+		b.Profile.LinkLocalNetworks[0].Prefixes = nil
+		b.Profile.KeptTagKeys = nil
+		b.Rules.Forbidden, b.Rules.Hygiene = nil, nil
+		b.Before.Paths = nil
+		return b
 	}
-	if l != fingerprintLimits() {
-		t.Errorf("ComputeFingerprint changed its limits to %+v", l)
+	tests := []struct {
+		name   string
+		bundle func() model.Bundle
+	}{
+		{"unsorted lists", unsorted},
+		{"nil lists", nilLists},
 	}
-	for range 10 {
-		if got := mustFingerprint(t, b, l); got != first {
-			t.Fatalf("a later call gave %s, the first %s", got, first)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, l := tt.bundle(), fingerprintLimits()
+			first := mustFingerprint(t, b, l)
+			// DeepEqual tells a nil list from an empty one.
+			if want := tt.bundle(); !reflect.DeepEqual(b, want) {
+				t.Errorf("ComputeFingerprint changed its Bundle:\ngot  %#v\nwant %#v", b, want)
+			}
+			if l != fingerprintLimits() {
+				t.Errorf("ComputeFingerprint changed its limits to %+v", l)
+			}
+			for range 10 {
+				if got := mustFingerprint(t, b, l); got != first {
+					t.Fatalf("a later call gave %s, the first %s", got, first)
+				}
+			}
+		})
 	}
 }

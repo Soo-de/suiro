@@ -298,8 +298,8 @@ type enumCase struct {
 }
 
 func TestFragmentValidateEnumerations(t *testing.T) {
-	// setGate replaces the gates with the one at i, so a changed layer, type
-	// or direction meets no other gate.
+	// Each case changes one field of the full base fragment and leaves the
+	// rest as it is.
 	cases := []enumCase{
 		{field: "gate layer", typ: "Layer", set: func(f *model.Fragment, v string) { f.Gates[groupGate].Layer = model.Layer(v) }},
 		{field: "route gate layer", typ: "Layer", set: func(f *model.Fragment, v string) { f.Gates[routeGate].Layer = model.Layer(v) }},
@@ -332,6 +332,9 @@ func TestFragmentValidateEnumerations(t *testing.T) {
 		{field: "resource kind", typ: "ResourceKind", set: func(f *model.Fragment, v string) { f.Resources[0].Kind = model.ResourceKind(v) }},
 		{field: "selector resource kind", typ: "ResourceKind", set: func(f *model.Fragment, v string) {
 			f.Expectations[1].Destinations.ResourceKinds[0] = model.ResourceKind(v)
+		}},
+		{field: "source selector resource kind", typ: "ResourceKind", set: func(f *model.Fragment, v string) {
+			f.Expectations[1].Sources = model.EndpointSelector{ResourceKinds: []model.ResourceKind{model.ResourceKind(v)}}
 		}},
 		{field: "network policy enforcement", typ: "Toggle", empty: true, set: func(f *model.Fragment, v string) {
 			f.Profile.NetworkPolicyEnforcement = model.Toggle(v)

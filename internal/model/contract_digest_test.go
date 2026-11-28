@@ -221,7 +221,7 @@ func TestComputeDigestIgnores(t *testing.T) {
 			s.Objects[0].Body = json.RawMessage(`{"a":1,"b":[1,2],"c":{"d":"A","e":1e2}}`)
 		}},
 		{"escaped letter", func(s *model.Snapshot) {
-			s.Objects[0].Body = json.RawMessage(`{"a":1,"b":[1,2],"c":{"d":"A","e":100}}`)
+			s.Objects[0].Body = json.RawMessage(`{"a":1,"b":[1,2],"c":{"d":"\u0041","e":100}}`)
 		}},
 	}
 	for _, tt := range tests {
