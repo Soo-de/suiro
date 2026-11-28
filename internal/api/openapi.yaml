@@ -775,7 +775,7 @@ components:
             $ref: "#/components/schemas/RuleRef"
         reason:
           $ref: "#/components/schemas/ReasonCode"
-          description: Present when outcome is undetermined.
+          description: Present when outcome is undetermined; listReasons gives each code's level.
         mappings:
           type: array
           description: Service ports that lead to the path's port.
