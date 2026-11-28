@@ -86,6 +86,9 @@ func (t *translation) object(o model.Object) {
 	switch o.Kind {
 	case model.KindNamespace:
 		t.namespace(o)
+	case model.KindPod, model.KindDeployment, model.KindStatefulSet, model.KindDaemonSet,
+		model.KindReplicaSet, model.KindJob, model.KindCronJob:
+		t.workload(o)
 	default:
 		t.unknownKind(o)
 	}

@@ -21,6 +21,14 @@ const (
 	serviceExternalName = "ExternalName"
 )
 
+// withDefault returns written, or def when nothing is written.
+func withDefault(written, def string) string {
+	if written == "" {
+		return def
+	}
+	return written
+}
+
 // defaultPolicyTypes is a NetworkPolicy's policyTypes when none are written.
 func defaultPolicyTypes(egressRules int) []model.Direction {
 	if egressRules > 0 {
