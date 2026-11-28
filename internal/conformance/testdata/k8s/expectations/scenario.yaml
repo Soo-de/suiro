@@ -1,0 +1,182 @@
+name: expectations
+oracle: "model.ExpectationsFile and model.ExpectationStatus; Kubernetes, Service, Port definitions"
+sources:
+- id: payments/api
+  kind: git
+  namespace: payments
+  manifests: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: api, namespace: payments}
+    spec:
+      template:
+        metadata: {labels: {app: api}}
+        spec: {containers: [{name: api, ports: [{name: http, containerPort: 8080}]}]}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: web, namespace: payments}
+    spec: {template: {metadata: {labels: {app: web}}, spec: {containers: [{name: web}]}}}
+    ---
+    apiVersion: v1
+    kind: Service
+    metadata: {name: payments, namespace: payments}
+    spec:
+      selector: {app: api}
+      ports: [{port: 80, targetPort: http}]
+    ---
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata: {name: api, namespace: payments}
+    spec:
+      podSelector: {matchLabels: {app: api}}
+      policyTypes: [Ingress]
+      ingress:
+      - from: [{podSelector: {matchLabels: {app: web}}}]
+        ports: [{port: 8080}]
+  expectations: |
+    apiVersion: suiro/v1
+    kind: Expectations
+    expectations:
+      - name: api-reaches-db
+        sources: {workload: api}
+        destinations: {rds: orders-db}
+        ports: [{protocol: tcp, from: 5432, to: 5432}]
+        sourceQuantifier: all
+        destinationQuantifier: any
+      - name: web-reaches-payments
+        sources: {workload: web}
+        destinations: {service: payments}
+        ports: [{protocol: tcp, from: 80, to: 80}]
+        sourceQuantifier: all
+        destinationQuantifier: all
+      - name: web-reaches-metrics
+        sources: {workload: web}
+        destinations: {workload: api}
+        ports: [{protocol: tcp, from: 9090, to: 9090}]
+        sourceQuantifier: all
+        destinationQuantifier: all
+      - name: web-reaches-internet
+        sources: {workload: web}
+        destinations: {internet: true}
+        ports: [{protocol: tcp, from: 443, to: 443}]
+        sourceQuantifier: all
+        destinationQuantifier: all
+      - name: web-misses-port
+        sources: {workload: web}
+        destinations: {service: payments}
+        ports: [{protocol: tcp, from: 81, to: 81}]
+        sourceQuantifier: all
+        destinationQuantifier: all
+      - name: every-protocol
+        sources: {self: true}
+        destinations: {internet: true}
+        ports: [{protocol: all, from: 0, to: 65535}]
+        sourceQuantifier: all
+        destinationQuantifier: all
+      - name: from-a-service
+        sources: {service: payments}
+        destinations: {self: true}
+        ports: [{protocol: tcp, from: 80, to: 80}]
+        sourceQuantifier: all
+        destinationQuantifier: all
+      - name: not-ours
+        sources: {application: shop/web}
+        destinations: {internet: true}
+        ports: [{protocol: tcp, from: 443, to: 443}]
+        sourceQuantifier: all
+        destinationQuantifier: all
+  want:
+    workloads:
+    - key: k8s:apps/Deployment/payments/api
+      kind: k8s:apps/Deployment
+      namespace: payments
+      name: api
+      podLabels: {app: api}
+      ports: [{container: api, name: http, port: 8080, protocol: tcp}]
+    - {key: k8s:apps/Deployment/payments/web, kind: k8s:apps/Deployment, namespace: payments, name: web, podLabels: {app: web}}
+    gates:
+    - id: k8s:core/Service/payments/payments
+      layer: kubernetes
+      type: transform
+      target: {pods: {namespace: payments, selector: {matchLabels: {app: api}}}}
+      mappings: [{protocol: tcp, port: 80, targetPortName: http}]
+      object: k8s:core/Service/payments/payments
+    - id: k8s:networking.k8s.io/NetworkPolicy/payments/api#ingress
+      layer: kubernetes
+      type: filter
+      direction: ingress
+      semantics: {stateful: true, isolating: true}
+      target: {pods: {namespace: payments, selector: {matchLabels: {app: api}}}}
+      rules:
+      - action: allow
+        peers: [{pods: {namespace: payments, podSelector: {matchLabels: {app: web}}}}]
+        ports: [{protocol: tcp, from: 8080, to: 8080}]
+        origin: {locator: "spec.ingress[0]"}
+      object: k8s:networking.k8s.io/NetworkPolicy/payments/api
+    expectations:
+    - id: payments/api#api-reaches-db
+      kind: required
+      name: api-reaches-db
+      sources: {workload: api}
+      destinations: {rds: orders-db}
+      ports: [{protocol: tcp, from: 5432, to: 5432}]
+      sourceQuantifier: all
+      destinationQuantifier: any
+      mode: warn
+    - id: payments/api#web-misses-port
+      kind: required
+      name: web-misses-port
+      sources: {workload: web}
+      destinations: {service: payments}
+      ports: [{protocol: tcp, from: 81, to: 81}]
+      sourceQuantifier: all
+      destinationQuantifier: all
+      mode: warn
+    - id: payments/api#web-reaches-internet
+      kind: required
+      name: web-reaches-internet
+      sources: {workload: web}
+      destinations: {internet: true}
+      ports: [{protocol: tcp, from: 443, to: 443}]
+      sourceQuantifier: all
+      destinationQuantifier: all
+      mode: warn
+    - id: payments/api#web-reaches-metrics
+      kind: required
+      name: web-reaches-metrics
+      sources: {workload: web}
+      destinations: {workload: api}
+      ports: [{protocol: tcp, from: 9090, to: 9090}]
+      sourceQuantifier: all
+      destinationQuantifier: all
+      mode: warn
+    - id: payments/api#web-reaches-payments
+      kind: required
+      name: web-reaches-payments
+      sources: {workload: web}
+      destinations: {service: payments}
+      ports: [{protocol: tcp, from: 80, to: 80}]
+      sourceQuantifier: all
+      destinationQuantifier: all
+      mode: warn
+    problems:
+    - reason: expectations-invalid
+      subject: suiro:core/Expectation/payments/api#every-protocol
+      origin: {locator: "ports[0]"}
+    - reason: expectations-invalid
+      subject: suiro:core/Expectation/payments/api#from-a-service
+      origin: {locator: sources.service}
+    - reason: expectations-invalid
+      subject: suiro:core/Expectation/payments/api#not-ours
+      origin: {}
+paths:
+- {key: "k8s:apps/Deployment/payments/web → k8s:apps/Deployment/payments/api : tcp/8080", verdict: allow}
+- {key: "k8s:apps/Deployment/payments/web → k8s:apps/Deployment/payments/api : tcp/9090", verdict: deny}
+- {key: "k8s:apps/Deployment/payments/web → internet : tcp/443", verdict: allow}
+statuses:
+- {expectation: "payments/api#api-reaches-db", status: unverifiable}
+- {expectation: "payments/api#web-misses-port", status: unverifiable}
+- {expectation: "payments/api#web-reaches-internet", status: satisfied}
+- {expectation: "payments/api#web-reaches-metrics", status: violated}
+- {expectation: "payments/api#web-reaches-payments", status: satisfied}

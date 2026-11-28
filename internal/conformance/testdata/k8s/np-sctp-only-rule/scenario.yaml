@@ -1,0 +1,47 @@
+name: np-sctp-only-rule
+oracle: "Kubernetes, Network Policies, SCTP support: an SCTP port allows SCTP alone"
+sources:
+- id: shop/app
+  kind: git
+  namespace: default
+  manifests: |
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata: {name: sctp-only, namespace: default}
+    spec:
+      podSelector: {matchLabels: {app: web}}
+      policyTypes: [Ingress]
+      ingress:
+      - from: [{podSelector: {matchLabels: {app: client}}}]
+        ports: [{protocol: SCTP, port: 80}]
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: web, namespace: default}
+    spec: {template: {metadata: {labels: {app: web}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: client, namespace: default}
+    spec: {template: {metadata: {labels: {app: client}}, spec: {containers: [{name: app}]}}}
+  want:
+    workloads:
+    - {key: k8s:apps/Deployment/default/client, kind: k8s:apps/Deployment, namespace: default, name: client, podLabels: {app: client}}
+    - {key: k8s:apps/Deployment/default/web, kind: k8s:apps/Deployment, namespace: default, name: web, podLabels: {app: web}}
+    gates:
+    - id: k8s:networking.k8s.io/NetworkPolicy/default/sctp-only#ingress
+      layer: kubernetes
+      type: filter
+      direction: ingress
+      semantics: {stateful: true, isolating: true}
+      target: {pods: {namespace: default, selector: {matchLabels: {app: web}}}}
+      object: k8s:networking.k8s.io/NetworkPolicy/default/sctp-only
+    problems:
+    - reason: rule-outside-model
+      subject: k8s:networking.k8s.io/NetworkPolicy/default/sctp-only
+      origin: {locator: "spec.ingress[0]"}
+paths:
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/web : tcp/0-65535", verdict: deny}
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/web : udp/0-65535", verdict: deny}
+- {key: "internet → k8s:apps/Deployment/default/web : tcp/80", verdict: deny}
+- {key: "k8s:apps/Deployment/default/web → k8s:apps/Deployment/default/client : tcp/80", verdict: allow}

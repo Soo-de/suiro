@@ -1,0 +1,63 @@
+name: np-mixed-rule
+oracle: "Kubernetes, Network Policies, The NetworkPolicy resource: a rule allows any listed peer on any listed port"
+sources:
+- id: shop/app
+  kind: git
+  namespace: default
+  manifests: |
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata: {name: mixed, namespace: default}
+    spec:
+      podSelector: {matchLabels: {app: web}}
+      policyTypes: [Ingress]
+      ingress:
+      - from:
+        - ipBlock: {cidr: "2001:db8::/32"}
+        - podSelector: {matchLabels: {app: client}}
+        ports:
+        - {protocol: SCTP, port: 7}
+        - {protocol: TCP, port: 80}
+        - {protocol: UDP, port: 53}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: web, namespace: default}
+    spec: {template: {metadata: {labels: {app: web}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: client, namespace: default}
+    spec: {template: {metadata: {labels: {app: client}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: other, namespace: default}
+    spec: {template: {metadata: {labels: {app: other}}, spec: {containers: [{name: app}]}}}
+  want:
+    workloads:
+    - {key: k8s:apps/Deployment/default/client, kind: k8s:apps/Deployment, namespace: default, name: client, podLabels: {app: client}}
+    - {key: k8s:apps/Deployment/default/other, kind: k8s:apps/Deployment, namespace: default, name: other, podLabels: {app: other}}
+    - {key: k8s:apps/Deployment/default/web, kind: k8s:apps/Deployment, namespace: default, name: web, podLabels: {app: web}}
+    gates:
+    - id: k8s:networking.k8s.io/NetworkPolicy/default/mixed#ingress
+      layer: kubernetes
+      type: filter
+      direction: ingress
+      semantics: {stateful: true, isolating: true}
+      target: {pods: {namespace: default, selector: {matchLabels: {app: web}}}}
+      rules:
+      - action: allow
+        peers: [{pods: {namespace: default, podSelector: {matchLabels: {app: client}}}}]
+        ports:
+        - {protocol: tcp, from: 80, to: 80}
+        - {protocol: udp, from: 53, to: 53}
+        origin: {locator: "spec.ingress[0]"}
+      object: k8s:networking.k8s.io/NetworkPolicy/default/mixed
+paths:
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/web : tcp/80", verdict: allow}
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/web : udp/53", verdict: allow}
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/web : tcp/7", verdict: deny}
+- {key: "k8s:apps/Deployment/default/client → k8s:apps/Deployment/default/web : udp/80", verdict: deny}
+- {key: "k8s:apps/Deployment/default/other → k8s:apps/Deployment/default/web : tcp/80", verdict: deny}
+- {key: "internet → k8s:apps/Deployment/default/web : tcp/80", verdict: deny}

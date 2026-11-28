@@ -1,0 +1,61 @@
+name: np-port-range
+oracle: "Kubernetes, Network Policies, Targeting a range of ports: multi-port-egress"
+sources:
+- id: shop/app
+  kind: git
+  namespace: default
+  manifests: |
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: multi-port-egress
+      namespace: default
+    spec:
+      podSelector:
+        matchLabels:
+          role: db
+      policyTypes:
+      - Egress
+      egress:
+      - to:
+        - ipBlock:
+            cidr: 10.0.0.0/24
+        ports:
+        - protocol: TCP
+          port: 32000
+          endPort: 32768
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: db, namespace: default}
+    spec: {template: {metadata: {labels: {role: db}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: other, namespace: default}
+    spec: {template: {metadata: {labels: {role: other}}, spec: {containers: [{name: app}]}}}
+  want:
+    workloads:
+    - {key: k8s:apps/Deployment/default/db, kind: k8s:apps/Deployment, namespace: default, name: db, podLabels: {role: db}}
+    - {key: k8s:apps/Deployment/default/other, kind: k8s:apps/Deployment, namespace: default, name: other, podLabels: {role: other}}
+    gates:
+    - id: k8s:networking.k8s.io/NetworkPolicy/default/multi-port-egress#egress
+      layer: kubernetes
+      type: filter
+      direction: egress
+      semantics: {stateful: true, isolating: true}
+      target: {pods: {namespace: default, selector: {matchLabels: {role: db}}}}
+      rules:
+      - action: allow
+        peers: [{prefix: 10.0.0.0/24}]
+        ports: [{protocol: tcp, from: 32000, to: 32768}]
+        origin: {locator: "spec.egress[0]"}
+      object: k8s:networking.k8s.io/NetworkPolicy/default/multi-port-egress
+paths:
+- {key: "k8s:apps/Deployment/default/db → external-private : tcp/32000-32768", verdict: placement}
+- {key: "k8s:apps/Deployment/default/db → external-private : tcp/0-31999", verdict: deny}
+- {key: "k8s:apps/Deployment/default/db → external-private : tcp/32769-65535", verdict: deny}
+- {key: "k8s:apps/Deployment/default/db → external-private : udp/32000-32768", verdict: deny}
+- {key: "k8s:apps/Deployment/default/db → internet : tcp/32000-32768", verdict: deny}
+- {key: "k8s:apps/Deployment/default/db → k8s:apps/Deployment/default/other : tcp/32000-32768", verdict: deny}
+- {key: "k8s:apps/Deployment/default/other → k8s:apps/Deployment/default/db : tcp/0-65535", verdict: allow}

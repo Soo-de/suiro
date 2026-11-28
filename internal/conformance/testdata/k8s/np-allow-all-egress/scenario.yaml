@@ -1,0 +1,73 @@
+name: np-allow-all-egress
+oracle: "Kubernetes, Network Policies, Default policies: Allow all egress traffic"
+sources:
+- id: shop/app
+  kind: git
+  namespace: default
+  manifests: |
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: allow-all-egress
+      namespace: default
+    spec:
+      podSelector: {}
+      egress:
+      - {}
+      policyTypes:
+      - Egress
+    ---
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: default-deny-egress
+      namespace: default
+    spec:
+      podSelector: {}
+      policyTypes:
+      - Egress
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: web, namespace: default}
+    spec: {template: {metadata: {labels: {app: web}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: client, namespace: default}
+    spec: {template: {metadata: {labels: {app: client}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: outsider, namespace: other}
+    spec: {template: {metadata: {labels: {app: outsider}}, spec: {containers: [{name: app}]}}}
+  want:
+    workloads:
+    - {key: k8s:apps/Deployment/default/client, kind: k8s:apps/Deployment, namespace: default, name: client, podLabels: {app: client}}
+    - {key: k8s:apps/Deployment/default/web, kind: k8s:apps/Deployment, namespace: default, name: web, podLabels: {app: web}}
+    - {key: k8s:apps/Deployment/other/outsider, kind: k8s:apps/Deployment, namespace: other, name: outsider, podLabels: {app: outsider}}
+    gates:
+    - id: k8s:networking.k8s.io/NetworkPolicy/default/allow-all-egress#egress
+      layer: kubernetes
+      type: filter
+      direction: egress
+      semantics: {stateful: true, isolating: true}
+      target: {pods: {namespace: default, selector: {}}}
+      rules:
+      - action: allow
+        peers: [{all: true}]
+        ports: [{protocol: all, from: 0, to: 65535}]
+        origin: {locator: "spec.egress[0]"}
+      object: k8s:networking.k8s.io/NetworkPolicy/default/allow-all-egress
+    - id: k8s:networking.k8s.io/NetworkPolicy/default/default-deny-egress#egress
+      layer: kubernetes
+      type: filter
+      direction: egress
+      semantics: {stateful: true, isolating: true}
+      target: {pods: {namespace: default, selector: {}}}
+      object: k8s:networking.k8s.io/NetworkPolicy/default/default-deny-egress
+paths:
+- {key: "k8s:apps/Deployment/default/web → k8s:apps/Deployment/default/client : tcp/0-65535", verdict: allow}
+- {key: "k8s:apps/Deployment/default/web → k8s:apps/Deployment/other/outsider : udp/0-65535", verdict: allow}
+- {key: "k8s:apps/Deployment/default/web → internet : tcp/0-65535", verdict: allow}
+- {key: "k8s:apps/Deployment/default/web → external-private : udp/0-65535", verdict: allow}

@@ -1,0 +1,76 @@
+name: np-namespace-by-name
+oracle: "Kubernetes, Network Policies, Targeting a Namespace by its name; Namespaces, Automatic labelling"
+sources:
+- id: shop/app
+  kind: git
+  namespace: data
+  manifests: |
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata: {name: by-name, namespace: data}
+    spec:
+      podSelector: {}
+      policyTypes: [Ingress]
+      ingress:
+      - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: frontend
+        - namespaceSelector:
+            matchExpressions:
+            - {key: kubernetes.io/metadata.name, operator: In, values: [jobs]}
+    ---
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: frontend
+      labels:
+        kubernetes.io/metadata.name: reports
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: db, namespace: data}
+    spec: {template: {metadata: {labels: {app: db}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: web, namespace: frontend}
+    spec: {template: {metadata: {labels: {app: web}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: batch, namespace: jobs}
+    spec: {template: {metadata: {labels: {app: batch}}, spec: {containers: [{name: app}]}}}
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: viewer, namespace: reports}
+    spec: {template: {metadata: {labels: {app: viewer}}, spec: {containers: [{name: app}]}}}
+  want:
+    namespaces:
+    - {name: frontend, labels: {kubernetes.io/metadata.name: frontend}}
+    workloads:
+    - {key: k8s:apps/Deployment/data/db, kind: k8s:apps/Deployment, namespace: data, name: db, podLabels: {app: db}}
+    - {key: k8s:apps/Deployment/frontend/web, kind: k8s:apps/Deployment, namespace: frontend, name: web, podLabels: {app: web}}
+    - {key: k8s:apps/Deployment/jobs/batch, kind: k8s:apps/Deployment, namespace: jobs, name: batch, podLabels: {app: batch}}
+    - {key: k8s:apps/Deployment/reports/viewer, kind: k8s:apps/Deployment, namespace: reports, name: viewer, podLabels: {app: viewer}}
+    gates:
+    - id: k8s:networking.k8s.io/NetworkPolicy/data/by-name#ingress
+      layer: kubernetes
+      type: filter
+      direction: ingress
+      semantics: {stateful: true, isolating: true}
+      target: {pods: {namespace: data, selector: {}}}
+      rules:
+      - action: allow
+        peers:
+        - {pods: {namespace: data, namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: frontend}}}}
+        - {pods: {namespace: data, namespaceSelector: {matchExpressions: [{key: kubernetes.io/metadata.name, operator: In, values: [jobs]}]}}}
+        ports: [{protocol: all, from: 0, to: 65535}]
+        origin: {locator: "spec.ingress[0]"}
+      object: k8s:networking.k8s.io/NetworkPolicy/data/by-name
+paths:
+- {key: "k8s:apps/Deployment/frontend/web → k8s:apps/Deployment/data/db : tcp/0-65535", verdict: allow}
+- {key: "k8s:apps/Deployment/jobs/batch → k8s:apps/Deployment/data/db : tcp/0-65535", verdict: allow}
+- {key: "k8s:apps/Deployment/reports/viewer → k8s:apps/Deployment/data/db : tcp/0-65535", verdict: deny}
+- {key: "internet → k8s:apps/Deployment/data/db : tcp/80", verdict: deny}
