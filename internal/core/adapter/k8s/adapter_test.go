@@ -1491,3 +1491,232 @@ spec: {podSelector: {}}
 	same(t, "gates", f.Gates, []model.Gate{filter(s.Objects[1], model.Ingress, model.LabelSelector{})})
 	wantProblems(t, f, problem{model.ReasonObjectInvalid, s.Objects[0].Key, anyLocator})
 }
+
+// Expectation entries. The cases follow model.ExpectationsFile, whose
+// documented example is the first one.
+
+// expectations translates an expectations file with the given entries.
+func expectations(t *testing.T, entries string) (model.Snapshot, model.Fragment) {
+	t.Helper()
+	doc := "apiVersion: suiro/v1\nkind: Expectations\nexpectations:\n" + entries
+	s := testutil.Expectations(t, snapshot(t, ""), model.ExpectationsFileName, doc)
+	return s, translate(t, k8s.New(), s)
+}
+
+// entry writes one entry named e from its fields in flow style; a field given
+// as "" is left out.
+func entry(sources, destinations, ports, sourceQuantifier, destinationQuantifier string) string {
+	out := "- name: e\n"
+	for _, field := range [][2]string{
+		{"sources", sources},
+		{"destinations", destinations},
+		{"ports", ports},
+		{"sourceQuantifier", sourceQuantifier},
+		{"destinationQuantifier", destinationQuantifier},
+	} {
+		if field[1] != "" {
+			out += "  " + field[0] + ": " + field[1] + "\n"
+		}
+	}
+	return out
+}
+
+const (
+	self    = "{self: true}"
+	web     = "{internet: true}"
+	onePort = "[{protocol: tcp, from: 80, to: 80}]"
+)
+
+func required(o model.Object, name string, e model.Expectation) model.Expectation {
+	e.ID = string(source) + "#" + name
+	e.Name = name
+	e.Kind = model.ExpectRequired
+	e.Mode = model.ModeWarn
+	e.Origin = o.Origin
+	return e
+}
+
+func TestExpectations(t *testing.T) {
+	s, f := expectations(t, `
+  - name: web-reaches-payments
+    sources: {self: true}
+    destinations: {service: payments/payments}
+    ports: [{protocol: tcp, from: 80, to: 80}]
+    sourceQuantifier: all
+    destinationQuantifier: all
+  - name: api-reaches-db
+    sources: {workload: api}
+    destinations: {rds: orders-db}
+    ports: [{protocol: tcp, from: 5432, to: 5432}]
+    sourceQuantifier: all
+    destinationQuantifier: any
+`)
+	if len(s.Objects) != 2 {
+		t.Fatalf("want two objects, got %d", len(s.Objects))
+	}
+	same(t, "fragment", f, model.Fragment{Source: source, Expectations: []model.Expectation{
+		required(s.Objects[0], "api-reaches-db", model.Expectation{
+			Sources:          model.EndpointSelector{Workload: "api"},
+			Destinations:     model.EndpointSelector{RDS: "orders-db"},
+			Ports:            []model.PortRange{tcpPorts(5432, 5432)},
+			SourceQuantifier: model.QuantifyAll, DestinationQuantifier: model.QuantifyAny,
+		}),
+		required(s.Objects[1], "web-reaches-payments", model.Expectation{
+			Sources:          model.EndpointSelector{Self: true},
+			Destinations:     model.EndpointSelector{Service: "payments/payments"},
+			Ports:            []model.PortRange{tcpPorts(80, 80)},
+			SourceQuantifier: model.QuantifyAll, DestinationQuantifier: model.QuantifyAll,
+		}),
+	}})
+}
+
+func TestValidExpectations(t *testing.T) {
+	own := model.EndpointSelector{Self: true}
+	for _, tt := range []struct {
+		name                  string
+		sources, destinations string
+		wantSources           model.EndpointSelector
+		wantDestinations      model.EndpointSelector
+	}{
+		{"service in this namespace", self, "{service: payments}", own, model.EndpointSelector{Service: "payments"}},
+		{"internet", self, web, own, model.EndpointSelector{Internet: true}},
+		{"namespaces with labels", self, "{namespaces: [data], labels: {matchLabels: {app: db}}}", own,
+			model.EndpointSelector{Namespaces: []string{"data"}, Labels: labels("app", "db")}},
+		{"namespaces alone", self, "{namespaces: [data, shop]}", own,
+			model.EndpointSelector{Namespaces: []string{"data", "shop"}}},
+		{"tags", self, "{tags: {k: v}}", own, model.EndpointSelector{Tags: map[string]string{"k": "v"}}},
+		{"arn", self, `{arn: "db:orders-db"}`, own, model.EndpointSelector{ARN: "db:orders-db"}},
+		{"application", self, "{application: payments/api}", own, model.EndpointSelector{Application: "payments/api"}},
+		{"workload with a kind", "{workload: api, workloadKind: Deployment}", web,
+			model.EndpointSelector{Workload: "api", WorkloadKind: "Deployment"}, model.EndpointSelector{Internet: true}},
+		{"own workloads as destinations", web, "{workload: api}",
+			model.EndpointSelector{Internet: true}, model.EndpointSelector{Workload: "api"}},
+		{"own workloads on both sides", self, self, own, own},
+		{"several forms", "{self: true, internet: true}", "{rds: a, internet: true}",
+			model.EndpointSelector{Self: true, Internet: true}, model.EndpointSelector{RDS: "a", Internet: true}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s, f := expectations(t, entry(tt.sources, tt.destinations, onePort, "any", "all"))
+			want := required(only(t, s), "e", model.Expectation{
+				Sources: tt.wantSources, Destinations: tt.wantDestinations,
+				Ports:            []model.PortRange{tcpPorts(80, 80)},
+				SourceQuantifier: model.QuantifyAny, DestinationQuantifier: model.QuantifyAll,
+			})
+			same(t, "fragment", f, model.Fragment{Source: source, Expectations: []model.Expectation{want}})
+		})
+	}
+}
+
+func TestExpectationPorts(t *testing.T) {
+	ports := "[{protocol: udp, from: 53, to: 53}, {protocol: tcp, from: 0, to: 65535}, {protocol: tcp, from: 80, to: 90}]"
+	s, f := expectations(t, entry(self, web, ports, "all", "all"))
+	want := required(only(t, s), "e", model.Expectation{
+		Sources: model.EndpointSelector{Self: true}, Destinations: model.EndpointSelector{Internet: true},
+		Ports:            []model.PortRange{udpPorts(53, 53), tcpPorts(0, 65535), tcpPorts(80, 90)},
+		SourceQuantifier: model.QuantifyAll, DestinationQuantifier: model.QuantifyAll,
+	})
+	same(t, "fragment", f, model.Fragment{Source: source, Expectations: []model.Expectation{want}})
+}
+
+func TestInvalidExpectations(t *testing.T) {
+	sources := func(s string) string { return entry(s, self, onePort, "all", "all") }
+	destinations := func(d string) string { return entry(self, d, onePort, "all", "all") }
+	ports := func(p string) string { return entry(self, web, p, "all", "all") }
+	// A locator is exact, or with under set may also name a field inside it.
+	type locator struct {
+		path  string
+		under bool
+	}
+	exact := func(path string) locator { return locator{path: path} }
+	within := func(path string) locator { return locator{path: path, under: true} }
+
+	for _, tt := range []struct {
+		name  string
+		entry string
+		want  locator
+	}{
+		{"unknown selector field", sources("{self: true, wrkload: api}"), exact("")},
+		{"unknown port field", ports("[{protocol: tcp, from: 80, to: 80, port: 80}]"), exact("")},
+		{"port number above 65535", ports("[{protocol: tcp, from: 80, to: 65536}]"), exact("")},
+		{"ports that are no list", ports("80"), exact("")},
+		{"selector that is a string", sources("api"), exact("")},
+		{"decoding comes first", entry("{}", "{wrkload: api}", "[]", "some", "some"), exact("")},
+
+		{"empty sources", sources("{}"), within("sources")},
+		{"no sources", entry("", self, onePort, "all", "all"), within("sources")},
+		{"empty destinations", destinations("{}"), within("destinations")},
+		{"no destinations", entry(self, "", onePort, "all", "all"), within("destinations")},
+		{"empty tags alone", destinations("{tags: {}}"), within("destinations")},
+		{"workloadKind alone", destinations("{workloadKind: Deployment}"), within("destinations")},
+		{"empty namespaces alone", destinations("{namespaces: []}"), within("destinations")},
+		{"no form comes before ports", entry("{}", self, "[]", "all", "all"), within("sources")},
+
+		{"all in destinations", destinations("{all: true}"), within("destinations")},
+		{"all beside self", sources("{self: true, all: true}"), within("sources")},
+		{"endpoints", destinations("{endpoints: [internet]}"), within("destinations")},
+		{"resourceKinds", destinations("{resourceKinds: [database]}"), within("destinations")},
+		{"endpoints in sources", sources("{self: true, endpoints: [internet]}"), within("sources")},
+
+		{"labels without namespaces", destinations("{internet: true, labels: {matchLabels: {a: b}}}"), within("destinations")},
+		{"labels without namespaces in sources", sources("{self: true, labels: {matchLabels: {a: b}}}"), within("sources")},
+
+		{"service in sources", entry("{service: payments}", self, onePort, "all", "all"), exact("sources.service")},
+		{"service beside self in sources", sources("{self: true, service: payments}"), exact("sources.service")},
+		{"service beside internet", destinations("{service: payments, internet: true}"), exact("destinations.service")},
+		{"service beside rds", destinations("{service: payments, rds: db}"), exact("destinations.service")},
+		{"service beside namespaces", destinations("{service: payments, namespaces: [a]}"), exact("destinations.service")},
+
+		{"neither side is ours", entry("{application: a/b}", web, onePort, "all", "all"), exact("")},
+		{"a service destination and foreign sources", entry(web, "{service: payments}", onePort, "all", "all"), exact("")},
+		{"foreign namespaces on both sides", entry("{namespaces: [a]}", "{namespaces: [b]}", onePort, "all", "all"), exact("")},
+
+		{"no ports", ports(""), exact("ports")},
+		{"empty ports", ports("[]"), exact("ports")},
+
+		{"protocol all", ports("[{protocol: all, from: 80, to: 80}]"), within("ports[0]")},
+		{"protocol TCP", ports("[{protocol: TCP, from: 80, to: 80}]"), within("ports[0]")},
+		{"protocol sctp", ports("[{protocol: sctp, from: 80, to: 80}]"), within("ports[0]")},
+		{"no protocol", ports("[{from: 80, to: 80}]"), within("ports[0]")},
+		{"from above to", ports("[{protocol: tcp, from: 81, to: 80}]"), within("ports[0]")},
+		{"second port", ports("[{protocol: tcp, from: 80, to: 80}, {protocol: all, from: 1, to: 2}]"), within("ports[1]")},
+		{"ports before quantifiers", entry(self, web, "[{protocol: all, from: 1, to: 2}]", "some", "some"), within("ports[0]")},
+
+		{"unknown source quantifier", entry(self, web, onePort, "some", "all"), exact("sourceQuantifier")},
+		{"quantifier in upper case", entry(self, web, onePort, "ALL", "all"), exact("sourceQuantifier")},
+		{"no source quantifier", entry(self, web, onePort, "", "all"), exact("sourceQuantifier")},
+		{"unknown destination quantifier", entry(self, web, onePort, "all", "none"), exact("destinationQuantifier")},
+		{"no destination quantifier", entry(self, web, onePort, "any", ""), exact("destinationQuantifier")},
+		{"source quantifier first", entry(self, web, onePort, "some", "some"), exact("sourceQuantifier")},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s, f := expectations(t, tt.entry)
+			wantEmptyModel(t, f)
+			wantProblems(t, f, problem{model.ReasonExpectationsInvalid, only(t, s).Key, anyLocator})
+			got := problems(f)
+			if len(got) != 1 {
+				return
+			}
+			ok := got[0].locator == tt.want.path || tt.want.under && under(got[0].locator, tt.want.path)
+			if !ok {
+				t.Errorf("locator %q, want %q", got[0].locator, tt.want.path)
+			}
+		})
+	}
+}
+
+func TestInvalidExpectationKeepsTheOthers(t *testing.T) {
+	good := "    sources: {self: true}\n    destinations: {internet: true}\n" +
+		"    ports: [{protocol: tcp, from: 80, to: 80}]\n    sourceQuantifier: all\n    destinationQuantifier: all\n"
+	s, f := expectations(t, "  - name: a-good\n"+good+"  - name: b-bad\n    sources: {self: true}\n  - name: c-good\n"+good)
+	if len(s.Objects) != 3 {
+		t.Fatalf("want three objects, got %d", len(s.Objects))
+	}
+	var ids []string
+	for _, e := range f.Expectations {
+		ids = append(ids, e.ID)
+	}
+	if want := []string{"shop/api#a-good", "shop/api#c-good"}; !slices.Equal(ids, want) {
+		t.Errorf("expectations %v, want %v", ids, want)
+	}
+	wantProblems(t, f, problem{model.ReasonExpectationsInvalid, s.Objects[1].Key, anyLocator})
+}
