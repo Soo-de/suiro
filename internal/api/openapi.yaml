@@ -2,4 +2,1048 @@ openapi: 3.1.0
 info:
   title: Suiro API
   version: "1"
-paths: {}
+  description: |-
+    Read-only HTTP/JSON API over stored analyses: whether network paths are
+    allowed, denied, placement dependent or unknown, and why.
+
+    Within v1 changes only add: new operations, optional fields, query
+    parameters and values of open string sets. A client shows a value it does
+    not know as it is. Enums are closed sets.
+
+    No body holds null. An optional field that is empty is left out and reads
+    as empty; every other field is always present, an empty list as [].
+
+    Every list has a canonical order, so one analysis always gives the same
+    body. Endpoint, gate and object keys are written as the server writes
+    them; encode them in query parameters. Times are RFC 3339 in UTC and
+    addresses are CIDR strings.
+
+    Results are filtered for the caller, so a client:
+    1. shows a gate with `redacted: true` as another team's gate, naming its
+       `owners`; its `members` may be empty and its `rules` and `mappings`
+       absent;
+    2. shows an end of a path or finding that is not in `endpoints` as a
+       hidden endpoint, without parsing its key;
+    3. accepts an empty or absent `owner` or `owners` (an unowned resource).
+
+    Errors are RFC 9457 problem details with a `code` extension.
+servers:
+  - url: /
+paths:
+  /api/v1/environments:
+    get:
+      operationId: listEnvironments
+      summary: Environments and the analysis to show for each
+      responses:
+        "200":
+          description: Every registered environment, sorted by name.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvironmentList"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/analyses/{id}:
+    get:
+      operationId: getAnalysis
+      summary: Everything needed to draw one analysis, except single paths
+      description: >-
+        A failed analysis answers 200 with empty lists and its cause in
+        problems. It is never to be read as clean, and neither is a partial one.
+      parameters:
+        - $ref: "#/components/parameters/AnalysisID"
+      responses:
+        "200":
+          description: The analysis summary.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisSummary"
+        "400":
+          description: "`invalid-parameter`: malformed id."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`analysis-not-found`."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/analyses/{id}/paths:
+    get:
+      operationId: listPaths
+      summary: Path summaries in a scope, filtered and paged
+      description: >-
+        At least one of namespace, endpoint, source or destination is required;
+        verdict and ports alone are not a scope. All given parameters must hold.
+        No verdict is filtered out unless verdict asks for it. Pages follow the
+        canonical path order and do not shift, since a stored analysis never
+        changes.
+      parameters:
+        - $ref: "#/components/parameters/AnalysisID"
+        - name: namespace
+          in: query
+          description: A workload end of the path is in one of these namespaces.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+        - name: endpoint
+          in: query
+          description: Either end of the path is this endpoint key.
+          schema:
+            type: string
+        - name: source
+          in: query
+          description: The source is exactly this endpoint key.
+          schema:
+            type: string
+        - name: destination
+          in: query
+          description: The destination is exactly this endpoint key.
+          schema:
+            type: string
+        - name: ports
+          in: query
+          description: >-
+            The path's port range overlaps this one: "tcp/5432", "udp/53" or
+            "tcp/30000-32767".
+          schema:
+            $ref: "#/components/schemas/PortsParameter"
+        - name: verdict
+          in: query
+          description: The path has one of these verdicts.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/Verdict"
+        - name: limit
+          in: query
+          description: Page size.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 200
+        - name: cursor
+          in: query
+          description: >-
+            The previous response's next, unchanged, with the same filter
+            parameters. Opaque.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: One page of paths.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PathList"
+        "400":
+          description: "`invalid-parameter` or `scope-required`."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`analysis-not-found` or `endpoint-not-found`."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          $ref: "#/components/responses/AnalysisFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/analyses/{id}/paths/detail:
+    get:
+      operationId: getPathDetail
+      summary: The gate chains of one path, computed on request
+      description: >-
+        source, destination and ports are the exact key of one path; overlapping
+        its port range is not enough. In a chain, the steps whose outcome equals
+        the class pair's outcome decided it.
+      parameters:
+        - $ref: "#/components/parameters/AnalysisID"
+        - name: source
+          in: query
+          required: true
+          description: Source endpoint key.
+          schema:
+            type: string
+        - name: destination
+          in: query
+          required: true
+          description: Destination endpoint key.
+          schema:
+            type: string
+        - name: ports
+          in: query
+          required: true
+          description: The path's port range, written as in listPaths.
+          schema:
+            $ref: "#/components/schemas/PortsParameter"
+      responses:
+        "200":
+          description: The path with one chain per class pair.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PathDetail"
+        "400":
+          description: "`invalid-parameter`."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "`analysis-not-found`, `endpoint-not-found` or `path-not-found`."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          $ref: "#/components/responses/AnalysisFailed"
+        "410":
+          description: >-
+            `explain-unavailable`: the detail can no longer be computed, because
+            the reads behind the analysis were deleted or it was made by another
+            version.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          description: >-
+            `explain-timeout`: computing the detail ran past its time budget;
+            the request can be retried.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/v1/reasons:
+    get:
+      operationId: listReasons
+      summary: Every reason code with its level and scope
+      responses:
+        "200":
+          description: The reason table, sorted by code.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReasonList"
+        "500":
+          $ref: "#/components/responses/InternalError"
+components:
+  parameters:
+    AnalysisID:
+      name: id
+      in: path
+      required: true
+      description: Analysis number.
+      schema:
+        $ref: "#/components/schemas/AnalysisID"
+  responses:
+    AnalysisFailed:
+      description: >-
+        `analysis-failed`: the analysis failed, so it has no paths; an empty
+        list would read as no path.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    InternalError:
+      description: "`internal-error`: unexpected failure."
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    # Envelopes.
+    EnvironmentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          description: Sorted by name.
+          items:
+            $ref: "#/components/schemas/Environment"
+        next:
+          type: string
+          description: Cursor of the following page; absent on the last one.
+    Environment:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        baseline:
+          $ref: "#/components/schemas/AnalysisRef"
+          description: >-
+            The baseline analysis in force, done or partial; absent before the
+            first one.
+        latestAttempt:
+          $ref: "#/components/schemas/AnalysisRef"
+          description: >-
+            The newest baseline analysis, present only when it is newer than
+            baseline, so it did not succeed.
+    AnalysisRef:
+      type: object
+      required: [id, status, createdAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/AnalysisID"
+        status:
+          $ref: "#/components/schemas/AnalysisStatus"
+        createdAt:
+          type: string
+          format: date-time
+    AnalysisSummary:
+      type: object
+      required:
+        - kind
+        - environment
+        - status
+        - fingerprint
+        - toolVersion
+        - schemaVersion
+        - algorithmVersion
+        - ruleSetVersion
+        - inputs
+        - profile
+        - limits
+        - unexamined
+        - endpoints
+        - edges
+        - findings
+        - problems
+      properties:
+        id:
+          $ref: "#/components/schemas/AnalysisID"
+        kind:
+          $ref: "#/components/schemas/AnalysisKind"
+        environment:
+          type: string
+        status:
+          $ref: "#/components/schemas/AnalysisStatus"
+        createdAt:
+          type: string
+          format: date-time
+        fingerprint:
+          $ref: "#/components/schemas/Digest"
+        toolVersion:
+          type: string
+        schemaVersion:
+          type: integer
+        algorithmVersion:
+          type: integer
+        ruleSetVersion:
+          type: integer
+          format: int64
+        inputs:
+          type: array
+          description: The reads the analysis used.
+          items:
+            $ref: "#/components/schemas/SnapshotRef"
+        profile:
+          $ref: "#/components/schemas/ClusterProfile"
+          description: The cluster settings the verdicts assume.
+        limits:
+          $ref: "#/components/schemas/Limits"
+        unexamined:
+          type: array
+          description: >-
+            What was not looked at, so allow never reads as "the connection
+            works". Known values: aws-layer, application, host-firewall, ipv6,
+            tls, uncomputed-pairs.
+          items:
+            type: string
+        endpoints:
+          type: array
+          description: Sorted by key.
+          items:
+            $ref: "#/components/schemas/Endpoint"
+        edges:
+          type: array
+          description: >-
+            Path counts per pair of groups, sorted by source group, then
+            destination group: namespaces before endpoints, each by name.
+          items:
+            $ref: "#/components/schemas/Edge"
+        findings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Finding"
+        problems:
+          type: array
+          items:
+            $ref: "#/components/schemas/Problem"
+    Edge:
+      type: object
+      required: [source, destination, verdicts]
+      properties:
+        source:
+          $ref: "#/components/schemas/EdgeGroup"
+        destination:
+          $ref: "#/components/schemas/EdgeGroup"
+        verdicts:
+          $ref: "#/components/schemas/VerdictCounts"
+    EdgeGroup:
+      type: object
+      description: >-
+        Exactly one field is present: namespace for workloads, endpoint for any
+        other endpoint.
+      minProperties: 1
+      maxProperties: 1
+      properties:
+        namespace:
+          type: string
+        endpoint:
+          $ref: "#/components/schemas/EndpointKey"
+    VerdictCounts:
+      type: object
+      description: Number of paths (port ranges, not connections) by verdict.
+      required: [allow, deny, placement, unknown]
+      properties:
+        allow:
+          type: integer
+          minimum: 0
+        deny:
+          type: integer
+          minimum: 0
+        placement:
+          type: integer
+          minimum: 0
+        unknown:
+          type: integer
+          minimum: 0
+    PathList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          description: Sorted by source, destination, protocol and first port.
+          items:
+            $ref: "#/components/schemas/Path"
+        next:
+          type: string
+          description: Cursor of the following page; absent on the last one.
+    ReasonList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          description: Every reason code once, sorted by code.
+          items:
+            $ref: "#/components/schemas/Reason"
+    Reason:
+      type: object
+      required: [code, level, scope]
+      properties:
+        code:
+          $ref: "#/components/schemas/ReasonCode"
+        level:
+          type: string
+          description: >-
+            What the reason does to verdicts. Known values: gate, partial,
+            input, warning.
+        scope:
+          type: string
+          description: >-
+            How far the reason reaches. Known values: none, step, endpoint,
+            namespace, source, expectation, paths, analysis.
+    Error:
+      type: object
+      description: RFC 9457 problem details with a code extension.
+      required: [type, title, status, detail, code]
+      properties:
+        type:
+          type: string
+          description: Always "about:blank" in v1.
+        title:
+          type: string
+          description: Name of the HTTP status.
+        status:
+          type: integer
+        detail:
+          type: string
+          description: Explanation for people.
+        code:
+          type: string
+          description: >-
+            Stable code for programs. Known values: invalid-parameter,
+            scope-required, analysis-not-found, endpoint-not-found,
+            path-not-found, analysis-failed, explain-unavailable,
+            explain-timeout, internal-error.
+
+    # Closed sets.
+    Verdict:
+      type: string
+      description: Judgment of one path.
+      enum: [allow, deny, placement, unknown]
+    Outcome:
+      type: string
+      description: Judgment of one gate step or class pair.
+      enum: [pass, block, undetermined]
+    AnalysisKind:
+      type: string
+      enum: [baseline, pr]
+    AnalysisStatus:
+      type: string
+      description: >-
+        done: every input was usable (paths may still be unknown). partial:
+        some inputs or limits left paths unknown; see problems. failed: no
+        result. no_preview: pull request analyses only. Neither partial nor
+        failed is ever clean.
+      enum: [done, partial, no_preview, failed]
+    Direction:
+      type: string
+      enum: [ingress, egress]
+    GateType:
+      type: string
+      enum: [filter, route, transform]
+    FindingKind:
+      type: string
+      enum: [forbidden, required, hygiene, unmatched]
+    ExpectationStatus:
+      type: string
+      enum: [satisfied, violated, unverifiable]
+
+    # Strings.
+    AnalysisID:
+      type: integer
+      format: int64
+      minimum: 1
+    EndpointKey:
+      type: string
+      description: >-
+        Graph node: a workload or AWS resource object key, "internet",
+        "external-private", "link-local" or a named network.
+    ObjectKey:
+      type: string
+      description: '"<source>:<group>/<Kind>/[<namespace>/]<name>".'
+    GateID:
+      type: string
+    SourceID:
+      type: string
+      description: Input source, such as "<team>/<application>".
+    Digest:
+      type: string
+      pattern: "^sha256:[0-9a-f]{64}$"
+    ReasonCode:
+      type: string
+      description: >-
+        Why something was not judged normally; listReasons gives each code's
+        level. Treat an unknown code as input level, the worst one.
+    Layer:
+      type: string
+      description: "Known values: kubernetes, aws-instance, aws-network."
+    ResourceKind:
+      type: string
+      description: "Known values: database, load-balancer, instance, other."
+    CIDR:
+      type: string
+      description: IPv4 prefix, such as "10.244.0.0/16".
+    Toggle:
+      type: string
+      description: >-
+        Known values: on, off. An empty or absent setting is unknown, never
+        off.
+    Port:
+      type: integer
+      minimum: 0
+      maximum: 65535
+    PortsParameter:
+      type: string
+      description: '"<tcp|udp>/<port>" or "<tcp|udp>/<from>-<to>".'
+      pattern: "^(tcp|udp)/(0|[1-9][0-9]{0,4})(-[1-9][0-9]{0,4})?$"
+
+    # Paths and their chains.
+    PortRange:
+      type: object
+      description: Inclusive range of destination container ports.
+      required: [protocol, from, to]
+      properties:
+        protocol:
+          type: string
+          description: "Known values: tcp, udp, all."
+        from:
+          $ref: "#/components/schemas/Port"
+        to:
+          $ref: "#/components/schemas/Port"
+    PathKey:
+      type: object
+      required: [source, destination, ports]
+      properties:
+        source:
+          $ref: "#/components/schemas/EndpointKey"
+        destination:
+          $ref: "#/components/schemas/EndpointKey"
+        ports:
+          $ref: "#/components/schemas/PortRange"
+    Path:
+      type: object
+      required: [key, verdict]
+      properties:
+        key:
+          $ref: "#/components/schemas/PathKey"
+        verdict:
+          $ref: "#/components/schemas/Verdict"
+        reasons:
+          type: array
+          description: >-
+            Causes of an unknown verdict or an undetermined step; a denied path
+            can have them too.
+          items:
+            $ref: "#/components/schemas/ReasonCode"
+        sameNode:
+          type: boolean
+          description: The two ends may share a node.
+        outcomes:
+          type: string
+          description: >-
+            One letter per class pair, in pair order: P pass, B block, U
+            undetermined. Absent when all are the same, as verdict says.
+          pattern: "^[PBU]+$"
+    PathDetail:
+      type: object
+      required: [key, verdict, classes]
+      properties:
+        key:
+          $ref: "#/components/schemas/PathKey"
+        verdict:
+          $ref: "#/components/schemas/Verdict"
+        reasons:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReasonCode"
+        classes:
+          type: array
+          description: One chain per class pair; never empty.
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/ClassResult"
+        gateOrigins:
+          type: array
+          description: >-
+            Where each gate named in a step's members is declared, once each,
+            sorted by id. Gates the analysis adds itself have none.
+          items:
+            $ref: "#/components/schemas/GateOrigin"
+    GateOrigin:
+      type: object
+      required: [id, object, origin]
+      properties:
+        id:
+          $ref: "#/components/schemas/GateID"
+        object:
+          $ref: "#/components/schemas/ObjectKey"
+        origin:
+          $ref: "#/components/schemas/Origin"
+    ClassResult:
+      type: object
+      required: [pair, outcome, gates]
+      properties:
+        pair:
+          $ref: "#/components/schemas/ClassPair"
+        outcome:
+          $ref: "#/components/schemas/Outcome"
+        gates:
+          type: array
+          description: Every step, in path order.
+          items:
+            $ref: "#/components/schemas/GateResult"
+    ClassPair:
+      type: object
+      required: [source, destination]
+      properties:
+        source:
+          $ref: "#/components/schemas/PlacementClass"
+        destination:
+          $ref: "#/components/schemas/PlacementClass"
+        sameNode:
+          type: boolean
+    PlacementClass:
+      type: object
+      description: One place an endpoint can be.
+      required: [name, addresses]
+      properties:
+        name:
+          type: string
+        nodeGroup:
+          type: string
+        subnet:
+          type: string
+        securityGroups:
+          type: array
+          items:
+            type: string
+        addresses:
+          type: array
+          items:
+            $ref: "#/components/schemas/CIDR"
+        publicAddress:
+          type: boolean
+    GateResult:
+      type: object
+      required: [gate, outcome]
+      properties:
+        gate:
+          $ref: "#/components/schemas/GateRef"
+        outcome:
+          $ref: "#/components/schemas/Outcome"
+        rules:
+          type: array
+          description: The rules that decided the step.
+          items:
+            $ref: "#/components/schemas/RuleRef"
+        reason:
+          $ref: "#/components/schemas/ReasonCode"
+          description: Present when outcome is undetermined.
+        mappings:
+          type: array
+          description: Service ports that lead to the path's port.
+          items:
+            $ref: "#/components/schemas/MappingRef"
+        translatedTo:
+          $ref: "#/components/schemas/PlacementClass"
+          description: What the source looks like after address translation.
+    GateRef:
+      type: object
+      description: >-
+        One chain step: the gates of one layer and direction that guard the same
+        target. A filter step with no members that is not redacted means no
+        policy selects the target, which passes.
+      required: [layer, type, members]
+      properties:
+        layer:
+          $ref: "#/components/schemas/Layer"
+        type:
+          $ref: "#/components/schemas/GateType"
+        direction:
+          $ref: "#/components/schemas/Direction"
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/GateID"
+        owners:
+          type: array
+          description: Owners of the members; kept when the step is redacted.
+          items:
+            $ref: "#/components/schemas/Owner"
+        redacted:
+          type: boolean
+          description: >-
+            Content the caller may not see was removed: show the step as another
+            team's gate, naming its owners.
+    RuleRef:
+      type: object
+      required: [gate, origin]
+      properties:
+        gate:
+          $ref: "#/components/schemas/GateID"
+        return:
+          type: boolean
+          description: Applied to the replies by a stateless filter.
+        origin:
+          $ref: "#/components/schemas/Origin"
+    MappingRef:
+      type: object
+      required: [gate, mapping]
+      properties:
+        gate:
+          $ref: "#/components/schemas/GateID"
+        mapping:
+          $ref: "#/components/schemas/PortMapping"
+    PortMapping:
+      type: object
+      description: One Service port.
+      required: [protocol, port]
+      properties:
+        name:
+          type: string
+        protocol:
+          type: string
+          description: "Known values: tcp, udp."
+        port:
+          $ref: "#/components/schemas/Port"
+        targetPort:
+          $ref: "#/components/schemas/Port"
+        targetPortName:
+          type: string
+    Origin:
+      type: object
+      description: Where an object or rule is declared.
+      required: [source]
+      properties:
+        source:
+          $ref: "#/components/schemas/SourceID"
+        file:
+          type: string
+          description: Repository-relative path.
+        line:
+          type: integer
+          minimum: 1
+        resource:
+          type: string
+          description: AWS resource ID.
+        locator:
+          type: string
+          description: The rule inside the object.
+
+    # Endpoints, findings and problems.
+    Owner:
+      type: object
+      description: Empty or absent when nobody owns the resource.
+      properties:
+        team:
+          type: string
+        application:
+          type: string
+    Endpoint:
+      type: object
+      required: [key, kind, name, classes]
+      properties:
+        key:
+          $ref: "#/components/schemas/EndpointKey"
+        kind:
+          type: string
+          description: >-
+            Known values: workload, aws-resource, internet, external-private,
+            link-local.
+        resourceKind:
+          $ref: "#/components/schemas/ResourceKind"
+        name:
+          type: string
+        namespace:
+          type: string
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/EndpointService"
+        classes:
+          type: array
+          description: The places the endpoint can be; never empty.
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/PlacementClass"
+        source:
+          $ref: "#/components/schemas/SourceID"
+        object:
+          $ref: "#/components/schemas/ObjectKey"
+        owner:
+          $ref: "#/components/schemas/Owner"
+    EndpointService:
+      type: object
+      required: [name, mappings]
+      properties:
+        name:
+          type: string
+          description: '"<namespace>/<name>".'
+        mappings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortMapping"
+    Finding:
+      type: object
+      description: An expectation or check that is not satisfied.
+      required: [kind, rule, subject, status, new, origin]
+      properties:
+        kind:
+          $ref: "#/components/schemas/FindingKind"
+        rule:
+          type: string
+        subject:
+          type: string
+        status:
+          $ref: "#/components/schemas/ExpectationStatus"
+        new:
+          type: boolean
+          description: Made by the analyzed change.
+        mode:
+          type: string
+          description: "Known values: warn, block."
+        paths:
+          type: array
+          items:
+            $ref: "#/components/schemas/PathKey"
+        reasons:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReasonCode"
+        origin:
+          $ref: "#/components/schemas/Origin"
+        owner:
+          $ref: "#/components/schemas/Owner"
+    Problem:
+      type: object
+      description: A reasoned warning or cause of an unknown verdict.
+      required: [reason, subject]
+      properties:
+        reason:
+          $ref: "#/components/schemas/ReasonCode"
+        subject:
+          type: string
+        message:
+          type: string
+        origin:
+          $ref: "#/components/schemas/Origin"
+
+    # Inputs and assumptions.
+    SnapshotRef:
+      type: object
+      required: [key, digest]
+      properties:
+        key:
+          $ref: "#/components/schemas/ReadKey"
+        revision:
+          type: string
+          description: The commit read; absent for AWS.
+        digest:
+          $ref: "#/components/schemas/Digest"
+    ReadKey:
+      type: object
+      required: [source]
+      properties:
+        source:
+          $ref: "#/components/schemas/SourceID"
+        pullRequest:
+          type: integer
+    ClusterProfile:
+      type: object
+      description: Cluster settings; an absent one is unknown.
+      properties:
+        cni:
+          type: string
+        networkPolicyEnforcement:
+          $ref: "#/components/schemas/Toggle"
+        networkPolicyMode:
+          type: string
+        podSecurityGroups:
+          $ref: "#/components/schemas/Toggle"
+        externalSNAT:
+          $ref: "#/components/schemas/Toggle"
+        excludeSNATCIDRs:
+          type: array
+          items:
+            $ref: "#/components/schemas/CIDR"
+        customNetworking:
+          $ref: "#/components/schemas/Toggle"
+        ephemeralPorts:
+          $ref: "#/components/schemas/PortRange"
+        nodeGroups:
+          type: array
+          items:
+            $ref: "#/components/schemas/NodeGroup"
+        podCIDRs:
+          type: array
+          items:
+            $ref: "#/components/schemas/CIDR"
+        ipBlockAppliesToPods:
+          $ref: "#/components/schemas/Toggle"
+        notInternet:
+          type: array
+          items:
+            $ref: "#/components/schemas/CIDR"
+        privateNetworks:
+          type: array
+          items:
+            $ref: "#/components/schemas/NamedNetwork"
+        linkLocalNetworks:
+          type: array
+          items:
+            $ref: "#/components/schemas/NamedNetwork"
+        namespaceLabels:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties:
+              type: string
+        keptTagKeys:
+          type: array
+          items:
+            type: string
+        sources:
+          type: object
+          description: >-
+            Where each value came from, by field name. Known values: aws, admin.
+          additionalProperties:
+            type: string
+    NodeGroup:
+      type: object
+      required: [name, subnets, securityGroups]
+      properties:
+        name:
+          type: string
+        subnets:
+          type: array
+          items:
+            type: string
+        securityGroups:
+          type: array
+          items:
+            type: string
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+        taints:
+          type: array
+          items:
+            $ref: "#/components/schemas/Taint"
+    Taint:
+      type: object
+      required: [key, effect]
+      properties:
+        key:
+          type: string
+        value:
+          type: string
+        effect:
+          type: string
+    NamedNetwork:
+      type: object
+      required: [name, prefixes]
+      properties:
+        name:
+          type: string
+        prefixes:
+          type: array
+          items:
+            $ref: "#/components/schemas/CIDR"
+    Limits:
+      type: object
+      description: The counter limits the analysis ran with.
+      required: [endpoints, rules, prefixesPerEndpoint, portRangesPerPair, evaluations]
+      properties:
+        endpoints:
+          type: integer
+        rules:
+          type: integer
+        prefixesPerEndpoint:
+          type: integer
+        portRangesPerPair:
+          type: integer
+        evaluations:
+          type: integer
