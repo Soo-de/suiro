@@ -122,6 +122,19 @@ func TestExamplesHoldNoNull(t *testing.T) {
 type jsonField struct {
 	typ      reflect.Type
 	optional bool
+	// useless marks omitempty on a type it never omits.
+	useless bool
+}
+
+// canBeEmpty reports whether omitempty can ever leave out a value of typ.
+func canBeEmpty(typ reflect.Type) bool {
+	switch typ.Kind() {
+	case reflect.Struct:
+		return false
+	case reflect.Array:
+		return typ.Len() == 0
+	}
+	return true
 }
 
 // jsonFields returns the fields of the struct typ by JSON name, with
@@ -152,7 +165,12 @@ func jsonFields(typ reflect.Type) map[string]jsonField {
 			name = f.Name
 		}
 		opts := strings.Split(options, ",")
-		out[name] = jsonField{typ: f.Type, optional: slices.Contains(opts, "omitempty") || slices.Contains(opts, "omitzero")}
+		omitEmpty, omitZero := slices.Contains(opts, "omitempty"), slices.Contains(opts, "omitzero")
+		out[name] = jsonField{
+			typ:      f.Type,
+			optional: omitZero || omitEmpty && canBeEmpty(f.Type),
+			useless:  omitEmpty && !omitZero && !canBeEmpty(f.Type),
+		}
 	}
 	return out
 }
@@ -212,6 +230,32 @@ func jsonType(typ reflect.Type) string {
 	return typ.Kind().String()
 }
 
+// statedTypes returns the types s names itself or through its allOf parts,
+// sorted and without repeats.
+func statedTypes(s *openapi3.Schema) []string {
+	var out []string
+	if s.Type != nil {
+		out = slices.Clone(s.Type.Slice())
+	}
+	for _, part := range s.AllOf {
+		if part.Value != nil {
+			out = append(out, statedTypes(part.Value)...)
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// offersNull reports whether s or a branch of it names null as a type or value.
+func offersNull(s *openapi3.Schema) bool {
+	if (s.Type != nil && slices.Contains(s.Type.Slice(), "null")) || slices.Contains(s.Enum, nil) {
+		return true
+	}
+	return slices.ContainsFunc(slices.Concat(s.AllOf, s.AnyOf, s.OneOf), func(part *openapi3.SchemaRef) bool {
+		return part.Value != nil && offersNull(part.Value)
+	})
+}
+
 func (w *schemaWalker) walk(at string, typ reflect.Type, ref *openapi3.SchemaRef) {
 	t := w.t
 	t.Helper()
@@ -224,13 +268,12 @@ func (w *schemaWalker) walk(at string, typ reflect.Type, ref *openapi3.SchemaRef
 	}
 	s := ref.Value
 	want := jsonType(typ)
-	// A schema may give its type through allOf, so only a stated type is compared.
-	if s.Type != nil && !slices.Equal(s.Type.Slice(), []string{want}) {
-		t.Errorf("%s: schema type %v, Go type %s is %s", at, s.Type.Slice(), typ, want)
+	if got := statedTypes(s); !slices.Equal(got, []string{want}) {
+		t.Errorf("%s: schema types %v, Go type %s is %s", at, got, typ, want)
 		return
 	}
-	if s.Nullable {
-		t.Errorf("%s: schema is nullable", at)
+	if s.Nullable || s.VisitJSON(nil, openapi3.EnableJSONSchema2020()) == nil || offersNull(s) {
+		t.Errorf("%s: schema allows null", at)
 	}
 	switch want {
 	default:
@@ -275,8 +318,12 @@ func (w *schemaWalker) object(at string, typ reflect.Type, ref *openapi3.SchemaR
 	if !slices.Equal(got, want) {
 		t.Errorf("%s: schema properties %v, fields of %s %v", at, got, typ, want)
 	}
+	checkUnsetEncoding(t, at, typ, sh.required)
 	for _, name := range want {
 		f := fields[name]
+		if f.useless {
+			t.Errorf("%s.%s: omitempty never omits a %s", at, name, f.typ)
+		}
 		prop, ok := sh.properties[name]
 		if !ok {
 			continue
@@ -290,6 +337,124 @@ func (w *schemaWalker) object(at string, typ reflect.Type, ref *openapi3.SchemaR
 		}
 		w.outer = ""
 		w.walk(at+"."+name, f.typ, prop)
+	}
+}
+
+// checkUnsetEncoding encodes a value of typ with nothing set but its lists
+// and maps that are always written, and demands exactly the required fields,
+// none of them null.
+func checkUnsetEncoding(t *testing.T, at string, typ reflect.Type, required []string) {
+	t.Helper()
+	value := reflect.New(typ).Elem()
+	fields := jsonFields(typ)
+	for _, f := range reflect.VisibleFields(typ) {
+		name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+		if !f.IsExported() || f.Anonymous || fields[name].optional {
+			continue
+		}
+		switch f.Type.Kind() {
+		case reflect.Slice:
+			value.FieldByIndex(f.Index).Set(reflect.MakeSlice(f.Type, 0, 0))
+		case reflect.Map:
+			value.FieldByIndex(f.Index).Set(reflect.MakeMap(f.Type))
+		}
+	}
+	data, err := json.Marshal(value.Addr().Interface())
+	if err != nil {
+		t.Errorf("%s: encode an unset %s: %v", at, typ, err)
+		return
+	}
+	object, ok := decodeAny(t, data).(map[string]any)
+	if !ok {
+		t.Errorf("%s: an unset %s encodes as %s, not an object", at, typ, data)
+		return
+	}
+	got, want := slices.Sorted(maps.Keys(object)), slices.Sorted(slices.Values(required))
+	want = slices.Compact(want)
+	if !slices.Equal(got, want) {
+		t.Errorf("%s: an unset %s writes %v, the schema requires %v", at, typ, got, want)
+	}
+	for _, key := range got {
+		// A required pointer has no unset value that is not null.
+		if f := fields[key].typ; f != nil && f.Kind() != reflect.Pointer && object[key] == nil {
+			t.Errorf("%s.%s: an unset %s writes null", at, key, typ)
+		}
+	}
+}
+
+// The fields AnalysisSummary shares with model.Analysis keep the model's type
+// and optionality; findings and problems are envelope lists, always written.
+func TestSummarySharedFieldsFollowTheModel(t *testing.T) {
+	ref := loadSpec(t).Components.Schemas["AnalysisSummary"]
+	if ref == nil || ref.Value == nil {
+		t.Fatal("components.schemas.AnalysisSummary is missing")
+	}
+	required := shapeOf(ref.Value).required
+	summary := jsonFields(topLevelTypes["AnalysisSummary"])
+	analysis := jsonFields(reflect.TypeFor[model.Analysis]())
+	shared := []string{
+		"id", "kind", "environment", "status", "createdAt", "fingerprint", "toolVersion", "schemaVersion",
+		"algorithmVersion", "ruleSetVersion", "inputs", "profile", "limits", "unexamined", "endpoints",
+	}
+	for _, name := range shared {
+		want, inModel := analysis[name]
+		got, inSummary := summary[name]
+		if !inModel || !inSummary {
+			t.Errorf("%s: in model.Analysis %t, in AnalysisSummary %t", name, inModel, inSummary)
+			continue
+		}
+		if got.typ != want.typ {
+			t.Errorf("AnalysisSummary.%s is %s, model.Analysis has %s", name, got.typ, want.typ)
+		}
+		if got.optional != want.optional {
+			t.Errorf("AnalysisSummary.%s: optional = %t, in model.Analysis %t", name, got.optional, want.optional)
+		}
+		if slices.Contains(required, name) == want.optional {
+			t.Errorf("AnalysisSummary.%s: required must be %t, as model.Analysis writes it", name, !want.optional)
+		}
+	}
+}
+
+// The envelope shapes the API note states, whatever the Go types say. The
+// summary's shared fields get their optionality from the model instead.
+func TestEnvelopeSchemasFollowTheNote(t *testing.T) {
+	type fieldSet struct{ required, optional []string }
+	want := map[string]fieldSet{
+		"EnvironmentList": {required: []string{"items"}, optional: []string{"next"}},
+		"Environment":     {required: []string{"name"}, optional: []string{"baseline", "latestAttempt"}},
+		"AnalysisRef":     {required: []string{"id", "status", "createdAt"}},
+		"Edge":            {required: []string{"source", "destination", "verdicts"}},
+		"EdgeGroup":       {optional: []string{"namespace", "endpoint"}},
+		"VerdictCounts":   {required: []string{"allow", "deny", "placement", "unknown"}},
+		"PathList":        {required: []string{"items"}, optional: []string{"next"}},
+		"ReasonList":      {required: []string{"items"}},
+		"Reason":          {required: []string{"code", "level", "scope"}},
+		"Error":           {required: []string{"type", "title", "status", "detail", "code"}},
+		"AnalysisSummary": {
+			required: []string{
+				"kind", "environment", "status", "fingerprint", "toolVersion", "schemaVersion",
+				"algorithmVersion", "ruleSetVersion", "inputs", "profile", "limits", "unexamined",
+				"endpoints", "edges", "findings", "problems",
+			},
+			optional: []string{"id", "createdAt"},
+		},
+	}
+	doc := loadSpec(t)
+	for _, name := range slices.Sorted(maps.Keys(want)) {
+		ref := doc.Components.Schemas[name]
+		if ref == nil || ref.Value == nil {
+			t.Errorf("components.schemas.%s is missing", name)
+			continue
+		}
+		sh := shapeOf(ref.Value)
+		all := slices.Sorted(slices.Values(slices.Concat(want[name].required, want[name].optional)))
+		if got := slices.Sorted(maps.Keys(sh.properties)); !slices.Equal(got, all) {
+			t.Errorf("%s: properties %v, want %v", name, got, all)
+		}
+		required := slices.Compact(slices.Sorted(slices.Values(sh.required)))
+		if wantRequired := slices.Sorted(slices.Values(want[name].required)); !slices.Equal(required, wantRequired) {
+			t.Errorf("%s: required %v, want %v", name, required, wantRequired)
+		}
 	}
 }
 
