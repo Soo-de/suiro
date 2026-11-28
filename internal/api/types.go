@@ -24,8 +24,8 @@ type Environment struct {
 	// Baseline is the baseline in force, done or partial; nil before the
 	// first one.
 	Baseline *AnalysisRef `json:"baseline,omitempty"`
-	// LatestAttempt is set only when the newest baseline analysis is newer
-	// than Baseline, so it did not succeed.
+	// LatestAttempt is the newest baseline analysis when it did not succeed:
+	// set when it is newer than Baseline, or when Baseline is nil.
 	LatestAttempt *AnalysisRef `json:"latestAttempt,omitempty"`
 }
 
