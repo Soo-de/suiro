@@ -359,8 +359,8 @@ components:
         latestAttempt:
           $ref: "#/components/schemas/AnalysisRef"
           description: >-
-            The newest baseline analysis, present only when it is newer than
-            baseline, so it did not succeed.
+            The newest baseline analysis when it did not succeed: present when it
+            is newer than baseline, or when there is no baseline yet.
     AnalysisRef:
       type: object
       required: [id, status, createdAt]
@@ -567,10 +567,11 @@ components:
     AnalysisStatus:
       type: string
       description: >-
-        done: every input was usable (paths may still be unknown). partial:
-        some inputs or limits left paths unknown; see problems. failed: no
-        result. no_preview: pull request analyses only. Neither partial nor
-        failed is ever clean.
+        done: every input was usable (paths may still be unknown from
+        gate-level reasons). partial: an input- or partial-level reason holds,
+        a reached limit included; problems name it. failed: no result.
+        no_preview: pull request analyses only. Neither partial nor failed is
+        ever clean.
       enum: [done, partial, no_preview, failed]
     Direction:
       type: string
@@ -703,7 +704,8 @@ components:
           type: array
           description: >-
             Where each gate named in a step's members is declared, once each,
-            sorted by id. Gates the analysis adds itself have none.
+            sorted by id. The NAT gateway step has an entry; "snat:" and
+            "endpoint:" steps have none.
           items:
             $ref: "#/components/schemas/GateOrigin"
     GateOrigin:
