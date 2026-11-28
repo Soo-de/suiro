@@ -84,6 +84,8 @@ func (t *translation) object(o model.Object) {
 		return
 	}
 	switch o.Kind {
+	case model.KindNamespace:
+		t.namespace(o)
 	default:
 		t.unknownKind(o)
 	}
