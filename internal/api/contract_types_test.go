@@ -181,6 +181,11 @@ func shapeOf(s *openapi3.Schema) shape {
 type schemaWalker struct {
 	t       *testing.T
 	visited map[string]bool
+	// leaf, when set, sees every schema of a scalar Go type.
+	leaf func(at string, typ reflect.Type, s *openapi3.Schema)
+	// outer is the description of the array or map around the schema being
+	// walked, "" for a plain property.
+	outer string
 }
 
 // jsonType is the JSON Schema type of a Go type that is not a pointer.
@@ -228,7 +233,12 @@ func (w *schemaWalker) walk(at string, typ reflect.Type, ref *openapi3.SchemaRef
 		t.Errorf("%s: schema is nullable", at)
 	}
 	switch want {
+	default:
+		if w.leaf != nil {
+			w.leaf(at, typ, s)
+		}
 	case "array":
+		w.outer = s.Description
 		w.walk(at+"[]", typ.Elem(), s.Items)
 	case "object":
 		if typ.Kind() != reflect.Map {
@@ -236,6 +246,7 @@ func (w *schemaWalker) walk(at string, typ reflect.Type, ref *openapi3.SchemaRef
 			return
 		}
 		if values := s.AdditionalProperties.Schema; values != nil {
+			w.outer = s.Description
 			w.walk(at+"{}", typ.Elem(), values)
 		} else {
 			t.Errorf("%s: map schema needs additionalProperties", at)
@@ -277,6 +288,7 @@ func (w *schemaWalker) object(at string, typ reflect.Type, ref *openapi3.SchemaR
 		if f.optional && required {
 			t.Errorf("%s.%s: omitted by %s when empty, so it must be optional", at, name, typ)
 		}
+		w.outer = ""
 		w.walk(at+"."+name, f.typ, prop)
 	}
 }
