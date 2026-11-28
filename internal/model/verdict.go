@@ -332,8 +332,10 @@ type PathDetail struct {
 	GateOrigins []GateOrigin `json:"gateOrigins,omitempty"`
 }
 
-// GateOrigin is where one gate of a PathDetail comes from: Gate.ID,
-// Gate.Object and Gate.Origin.
+// GateOrigin is where one gate of a PathDetail comes from: an adapter's
+// gate gives its Gate.ID, Gate.Object and Gate.Origin; the NAT gateway
+// step core adds gives the NAT gateway's ObjectKey as ID and Object and
+// that object's Origin in its snapshot.
 type GateOrigin struct {
 	ID     GateID    `json:"id"`
 	Object ObjectKey `json:"object"`
